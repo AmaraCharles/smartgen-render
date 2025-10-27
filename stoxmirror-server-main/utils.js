@@ -3,7 +3,7 @@ const salt = bcrypt.genSaltSync(10);
 const axios = require("axios");
 var nodemailer = require("nodemailer");
 const speakeasy = require('speakeasy');
-
+const  resend  = require ('resend');
 const secret = speakeasy.generateSecret({ length: 4 });
 
 
