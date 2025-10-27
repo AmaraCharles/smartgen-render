@@ -346,44 +346,130 @@ const sendWelcomeEmail = async ({ to, token }) => {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
       to: to,
-      subject: "Account Verification",
+      subject: "Verify Your Smartgentrade Account",
       html: `
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Smartgentrade Verification</title>
           <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-            .otp-box { background-color: #f8f9fa; padding: 15px; margin: 15px 0; text-align: center; font-size: 24px; font-weight: bold; color: #1a73e8; border-radius: 5px; }
-            .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
+            body {
+              background-color: #f4f6f8;
+              font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              color: #333;
+              margin: 0;
+              padding: 0;
+            }
+            .container {
+              max-width: 600px;
+              background: #ffffff;
+              margin: 40px auto;
+              border-radius: 12px;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+              overflow: hidden;
+            }
+            .header {
+              background: linear-gradient(135deg, #1a73e8, #1557b0);
+              color: #ffffff;
+              text-align: center;
+              padding: 30px 20px;
+            }
+            .header img {
+              width: 50px;
+              height: 50px;
+              margin-bottom: 10px;
+            }
+            .header h1 {
+              font-size: 22px;
+              margin: 0;
+            }
+            .content {
+              padding: 30px 25px;
+              text-align: left;
+            }
+            .content h2 {
+              color: #1a73e8;
+              font-size: 18px;
+              margin-bottom: 10px;
+            }
+            .content p {
+              line-height: 1.7;
+              font-size: 15px;
+              margin: 10px 0;
+            }
+            .otp-box {
+              background: #f0f4ff;
+              color: #1a73e8;
+              font-size: 28px;
+              letter-spacing: 6px;
+              font-weight: bold;
+              text-align: center;
+              padding: 18px;
+              border-radius: 8px;
+              margin: 25px 0;
+              border: 1px solid #d4e0ff;
+            }
+            .note {
+              background: #f9fafb;
+              padding: 12px;
+              border-left: 4px solid #1a73e8;
+              font-size: 14px;
+              color: #555;
+              margin-top: 10px;
+            }
+            .footer {
+              background-color: #f8f9fa;
+              text-align: center;
+              padding: 20px;
+              font-size: 13px;
+              color: #888;
+              border-top: 1px solid #e6e6e6;
+            }
+            .footer a {
+              color: #1a73e8;
+              text-decoration: none;
+            }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h2>Welcome to Smartgentrade</h2>
-          </div>
-          <div class="content">
-            <p>Hello,</p>
-            <p>Thank you for joining Smartgentrade! To ensure the security of your account, please verify your email address using the OTP below:</p>
-            <div class="otp-box">
-              ${speakeasy.totp({ secret: secret.base32, encoding: 'base32' })}
+          <div class="container">
+            <div class="header">
+              <img src="https://smartgentrade.com/logo.png" alt="Smartgentrade Logo" />
+              <h1>Welcome to Smartgentrade</h1>
             </div>
-            <p>This OTP is valid for a limited time. Please do not share it with anyone.</p>
-          </div>
-          <div class="footer">
-            <p>Best regards,<br>Smartgentrade Team</p>
+            <div class="content">
+              <h2>Verify Your Email</h2>
+              <p>Hello,</p>
+              <p>Thank you for creating an account with <strong>Smartgentrade</strong>. To protect your account, please use the verification code below to complete your registration:</p>
+
+              <div class="otp-box">
+                ${speakeasy.totp({ secret: secret.base32, encoding: 'base32' })}
+              </div>
+
+              <p>This code will expire in <strong>5 minutes</strong>. For your security, never share this code with anyone—even a Smartgentrade representative.</p>
+
+              <div class="note">
+                If you didn’t sign up for a Smartgentrade account, please ignore this email or contact our support team immediately.
+              </div>
+            </div>
+            <div class="footer">
+              <p>Need help? Contact our <a href="mailto:support@smartgentrade.com">support team</a>.</p>
+              <p>&copy; ${new Date().getFullYear()} Smartgentrade. All rights reserved.</p>
+            </div>
           </div>
         </body>
         </html>
       `
     });
-    console.log('Welcome email sent successfully');
+    console.log("✅ Welcome email sent successfully");
   } catch (error) {
-    console.error('Error sending welcome email:', error);
+    console.error("❌ Error sending welcome email:", error);
     throw error;
   }
 };
+
 
 const resendWelcomeEmail = async ({ to, token }) => {
   try {
