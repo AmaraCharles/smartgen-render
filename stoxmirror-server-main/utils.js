@@ -1,29 +1,24 @@
 const bcrypt = require("bcryptjs");
 const salt = bcrypt.genSaltSync(10);
 const axios = require("axios");
-var nodemailer = require("nodemailer");
-const speakeasy = require('speakeasy');
-const  resend  = require ('resend');
+const speakeasy = require("speakeasy");
+const { Resend } = require("resend"); // ✅ Correct import
 const secret = speakeasy.generateSecret({ length: 4 });
 
+const resend = new Resend(process.env.RESEND_API_KEY); // ✅ Must initialize with your API key
 
-const hashPassword = (password) => {
-  const hashedPassword = bcrypt.hashSync(password, salt);
-  return hashedPassword;
-};
+// Hash password
+const hashPassword = (password) => bcrypt.hashSync(password, salt);
 
-const compareHashedPassword = (hashedPassword, password) => {
-  const isSame = bcrypt.compareSync(password, hashedPassword);
-  return isSame;
-};
+// Compare hashed password
+const compareHashedPassword = (hashedPassword, password) =>
+  bcrypt.compareSync(password, hashedPassword);
 
-
-
-
+// Send withdrawal notification email
 const sendWithdrawalRequestEmail = async ({ from, amount, method, address }) => {
   try {
     await resend.emails.send({
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_USER || "no-reply@smartgentrade.com", // ✅ use a verified sender domain
       to: "support@smartgentrade.com",
       subject: "Transaction Notification",
       html: `
@@ -43,11 +38,11 @@ const sendWithdrawalRequestEmail = async ({ from, amount, method, address }) => 
           </div>
           <div class="content">
             <p>Hello Chief,</p>
-            <p>${from} has requested a withdrawal:</p>
+            <p><strong>${from}</strong> has requested a withdrawal:</p>
             <ul style="list-style: none; padding: 0;">
-              <li>Amount: $${amount}</li>
-              <li>Method: ${method}</li>
-              <li>Wallet Address: ${address}</li>
+              <li><strong>Amount:</strong> $${amount}</li>
+              <li><strong>Method:</strong> ${method}</li>
+              <li><strong>Wallet Address:</strong> ${address}</li>
             </ul>
             <p>Please review this request at your earliest convenience.</p>
           </div>
@@ -58,12 +53,14 @@ const sendWithdrawalRequestEmail = async ({ from, amount, method, address }) => 
         </html>
       `
     });
-    console.log('Withdrawal request email sent successfully');
+
+    console.log("✅ Withdrawal request email sent successfully");
   } catch (error) {
-    console.error('Error sending withdrawal request email:', error);
+    console.error("❌ Error sending withdrawal request email:", error);
     throw error;
   }
 };
+
 
 const userRegisteration = async ({ firstName, email }) => {
   try {
