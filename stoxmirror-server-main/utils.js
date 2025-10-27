@@ -341,7 +341,7 @@ const sendVerificationEmail = async ({ from, url }) => {
   }
 };
 
-const sendWelcomeEmail = async ({ to, token }) => {
+const sendWelcomeEmail = async ({ to, otp }) => {
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
@@ -445,7 +445,7 @@ const sendWelcomeEmail = async ({ to, token }) => {
               <p>Thank you for creating an account with <strong>Smartgentrade</strong>. To protect your account, please use the verification code below to complete your registration:</p>
 
               <div class="otp-box">
-                ${speakeasy.totp({ secret: secret.base32, encoding: 'base32' })}
+                ${otp}
               </div>
 
               <p>This code will expire in <strong>5 minutes</strong>. For your security, never share this code with anyone—even a Smartgentrade representative.</p>
