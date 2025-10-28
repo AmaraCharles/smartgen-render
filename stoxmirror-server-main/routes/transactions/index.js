@@ -5,7 +5,7 @@ var express = require("express");
 
 var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
-const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval } = require("../../utils");
+const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval,sendWithdrawalApproval } = require("../../utils");
 const nodeCrypto = require("crypto");
 
 // If global.crypto is missing or incomplete, polyfill it
@@ -1341,6 +1341,9 @@ router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
   }
 });
 
+
+
+
 router.put("/:_id/transactions/:transactionId/decline", async (req, res) => {
   
   const { _id } = req.params;
@@ -1615,6 +1618,15 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
       message: "Transaction approved",
     });
 
+    sendWithdrawalApproval({
+       from:user.firstName+ " "+user.lastName,          // User name
+  amount: amount,            // Amount withdrawn
+  method:method,   // Withdrawal method
+  timestamp: new Date().toLocaleString(), // Approval time
+  to: user.email // User email
+
+}
+    )
     return;
   } catch (error) {
     res.status(302).json({

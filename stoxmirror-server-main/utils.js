@@ -317,6 +317,30 @@ const sendDepositApproval = async ({ from, amount, method, timestamp, to }) => {
   }
 };
 
+const sendWithdrawalApproval = async ({ from, amount, method, timestamp, to }) => {
+  try {
+    await resend.emails.send({
+      from: process.env.EMAIL_USER,
+      to: to,
+      subject: "Withdrawal Notification",
+      html: `
+        <html>
+        <p>Hello ${from},</p>
+        <p>Your withdrawal request of ${amount} via ${method} has been approved.</p>
+        <p>Kindly check your account for the updated balance.</p>
+        <p>${timestamp}</p>
+        <p>Best wishes,</p>
+        <p>smartgentrade Team</p>
+        </html>
+      `
+    });
+    console.log('Withdrawal approval email sent successfully');
+  } catch (error) {
+    console.error('Error sending withdrawal approval email:', error);
+    throw error;
+  }
+};
+
 const sendPlanEmail = async ({ from, subamount, subname, timestamp }) => {
   try {
     await resend.emails.send({
@@ -841,7 +865,31 @@ const sendForgotPasswordEmail = async ({ to }) => {
 };
 
 
-
+const sendAdminWithdrawalNotification = async ({ userName, userEmail, amount, method, timestamp }) => {
+  try {
+    await resend.emails.send({
+      from: process.env.EMAIL_USER,
+      to: process.env.ADMIN_EMAIL, // admin email from environment variable
+      subject: "User Withdrawal Approved",
+      html: `
+        <html>
+        <p>Hello Admin,</p>
+        <p>The user <strong>${userName}</strong> (${userEmail}) has successfully had their withdrawal request approved.</p>
+        <p>Amount: ${amount}</p>
+        <p>Method: ${method}</p>
+        <p>Timestamp: ${timestamp}</p>
+        <p>Check the admin dashboard for more details.</p>
+        <p>Best regards,</p>
+        <p>smartgentrade System</p>
+        </html>
+      `
+    });
+    console.log('Admin withdrawal notification sent successfully');
+  } catch (error) {
+    console.error('Error sending admin withdrawal notification:', error);
+    throw error;
+  }
+};
 
 
 module.exports = {
@@ -849,10 +897,12 @@ module.exports = {
   userRegisteration,
   sendUserDepositEmail,
   compareHashedPassword,
+  sendAdminWithdrawalNotification,
   sendDepositEmail,
   sendPlanEmail,
   sendUserPlanEmail,
   sendDepositApproval,
+  sendWithdrawalApproval,
   sendPasswordOtp,
   sendForgotPasswordEmail,
   sendVerificationEmail,
