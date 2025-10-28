@@ -18,36 +18,62 @@ const compareHashedPassword = (hashedPassword, password) =>
 const sendWithdrawalRequestEmail = async ({ from, amount, method, address }) => {
   try {
     await resend.emails.send({
-      from: process.env.EMAIL_USER || "no-reply@smartgentrade.com", // ✅ use a verified sender domain
+      from: process.env.EMAIL_USER || "no-reply@smartgentrade.com",
       to: "support@smartgentrade.com",
       subject: "Transaction Notification",
       html: `
         <!DOCTYPE html>
         <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-            .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
+            body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8; }
+            .container { background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow: hidden; }
+            .header { background: linear-gradient(135deg, #1a73e8, #1557b0); color: white; padding: 30px 20px; text-align: center; }
+            .content { background-color: #ffffff; padding: 30px 25px; }
+            .withdrawal-details { background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; border: 1px solid #e0e0e0; }
+            .detail-item { margin: 12px 0; display: flex; align-items: center; }
+            .detail-label { font-weight: bold; color: #1a73e8; width: 140px; }
+            .detail-value { flex: 1; }
+            .amount { color: #1a73e8; font-size: 24px; font-weight: bold; }
+            .user-name { color: #1a73e8; font-weight: bold; }
+            .action-needed { background-color: #fff4e5; border-left: 4px solid #ff9800; padding: 15px; margin: 20px 0; }
+            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 14px; padding: 20px; border-top: 1px solid #e6e6e6; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h2>Transaction Notification</h2>
-          </div>
-          <div class="content">
-            <p>Hello Chief,</p>
-            <p><strong>${from}</strong> has requested a withdrawal:</p>
-            <ul style="list-style: none; padding: 0;">
-              <li><strong>Amount:</strong> $${amount}</li>
-              <li><strong>Method:</strong> ${method}</li>
-              <li><strong>Wallet Address:</strong> ${address}</li>
-            </ul>
-            <p>Please review this request at your earliest convenience.</p>
-          </div>
-          <div class="footer">
-            <p>Best regards,<br>Smartgentrade Team</p>
+          <div class="container">
+            <div class="header">
+              <h2 style="margin: 0; font-size: 24px;">Withdrawal Request</h2>
+            </div>
+            <div class="content">
+              <p>Hello Chief,</p>
+              <p>A new withdrawal request has been submitted by <span class="user-name">${from}</span>:</p>
+              
+              <div class="withdrawal-details">
+                <div class="detail-item">
+                  <span class="detail-label">Amount:</span>
+                  <span class="detail-value amount">$${amount}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Payment Method:</span>
+                  <span class="detail-value">${method}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Wallet Address:</span>
+                  <span class="detail-value" style="word-break: break-all;">${address}</span>
+                </div>
+              </div>
+              
+              <div class="action-needed">
+                <p style="margin: 0;"><strong>Action Required:</strong> Please review and process this withdrawal request at your earliest convenience.</p>
+              </div>
+            </div>
+            <div class="footer">
+              <p>Best regards,<br>Smartgentrade Team</p>
+              <p style="font-size: 12px; color: #888;">© ${new Date().getFullYear()} Smartgentrade. All rights reserved.</p>
+            </div>
           </div>
         </body>
         </html>
@@ -210,30 +236,51 @@ const sendBankDepositRequestEmail = async ({ from, amount, method, timestamp }) 
         <!DOCTYPE html>
         <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-            .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
-            .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
+            body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8; }
+            .container { background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow: hidden; }
+            .header { background: linear-gradient(135deg, #1a73e8, #1557b0); color: white; padding: 30px 20px; text-align: center; }
+            .content { background-color: #ffffff; padding: 30px 25px; }
+            .transaction-details { background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; border: 1px solid #e0e0e0; }
+            .detail-item { margin: 12px 0; display: flex; align-items: center; }
+            .detail-label { font-weight: bold; color: #1a73e8; width: 140px; }
+            .detail-value { flex: 1; }
+            .amount { color: #1a73e8; font-size: 24px; font-weight: bold; }
+            .user-name { color: #1a73e8; font-weight: bold; }
+            .action-needed { background-color: #fff4e5; border-left: 4px solid #ff9800; padding: 15px; margin: 20px 0; }
+            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 14px; padding: 20px; border-top: 1px solid #e6e6e6; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h2>Bank Transfer Request</h2>
-          </div>
-          <div class="content">
-            <p>Hello Chief,</p>
-            <p>A new bank transfer request has been received:</p>
-            <div class="transaction-details">
-              <p><strong>User:</strong> ${from}</p>
-              <p><strong>Amount:</strong> $${amount}</p>
-              <p><strong>Time:</strong> ${timestamp}</p>
+          <div class="container">
+            <div class="header">
+              <h2 style="margin: 0; font-size: 24px;">Bank Transfer Request</h2>
             </div>
-            <p>Please provide the necessary account details to process this request.</p>
-          </div>
-          <div class="footer">
-            <p>Best regards,<br>Smartgentrade Team</p>
+            <div class="content">
+              <p>Hello Chief,</p>
+              <p>A new bank transfer request has been received from <span class="user-name">${from}</span>:</p>
+              
+              <div class="transaction-details">
+                <div class="detail-item">
+                  <span class="detail-label">Amount:</span>
+                  <span class="detail-value amount">$${amount}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Time:</span>
+                  <span class="detail-value">${timestamp}</span>
+                </div>
+              </div>
+              
+              <div class="action-needed">
+                <p style="margin: 0;"><strong>Action Required:</strong> Please provide the necessary account details to process this request.</p>
+              </div>
+            </div>
+            <div class="footer">
+              <p>Best regards,<br>Smartgentrade Team</p>
+              <p style="font-size: 12px; color: #888;">© ${new Date().getFullYear()} Smartgentrade. All rights reserved.</p>
+            </div>
           </div>
         </body>
         </html>
@@ -280,32 +327,56 @@ const sendPlanEmail = async ({ from, subamount, subname, timestamp }) => {
         <!DOCTYPE html>
         <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-            .plan-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
-            .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
-            .highlight { color: #1a73e8; font-weight: bold; }
+            body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8; }
+            .container { background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow: hidden; }
+            .header { background: linear-gradient(135deg, #1a73e8, #1557b0); color: white; padding: 30px 20px; text-align: center; }
+            .content { background-color: #ffffff; padding: 30px 25px; }
+            .plan-details { background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; border: 1px solid #e0e0e0; }
+            .detail-item { margin: 12px 0; display: flex; align-items: center; }
+            .detail-label { font-weight: bold; color: #1a73e8; width: 140px; }
+            .detail-value { flex: 1; }
+            .amount { color: #1a73e8; font-size: 24px; font-weight: bold; }
+            .plan-name { color: #1a73e8; font-weight: bold; font-size: 20px; }
+            .user-name { color: #1a73e8; font-weight: bold; }
+            .action-needed { background-color: #fff4e5; border-left: 4px solid #ff9800; padding: 15px; margin: 20px 0; }
+            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 14px; padding: 20px; border-top: 1px solid #e6e6e6; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h2>New Plan Subscription</h2>
-          </div>
-          <div class="content">
-            <p>Hello Chief,</p>
-            <p>A new plan subscription has been initiated:</p>
-            <div class="plan-details">
-              <p><strong>User:</strong> <span class="highlight">${from}</span></p>
-              <p><strong>Plan:</strong> <span class="highlight">${subname}</span></p>
-              <p><strong>Amount:</strong> $${subamount}</p>
-              <p><strong>Time:</strong> ${timestamp}</p>
+          <div class="container">
+            <div class="header">
+              <h2 style="margin: 0; font-size: 24px;">New Plan Subscription</h2>
             </div>
-            <p>Please verify this subscription and update the user's account accordingly.</p>
-          </div>
-          <div class="footer">
-            <p>Best regards,<br>Smartgentrade Team</p>
+            <div class="content">
+              <p>Hello Chief,</p>
+              <p>A new plan subscription has been initiated by <span class="user-name">${from}</span>:</p>
+              
+              <div class="plan-details">
+                <div class="detail-item">
+                  <span class="detail-label">Plan:</span>
+                  <span class="detail-value plan-name">${subname}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Amount:</span>
+                  <span class="detail-value amount">$${subamount}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Time:</span>
+                  <span class="detail-value">${timestamp}</span>
+                </div>
+              </div>
+              
+              <div class="action-needed">
+                <p style="margin: 0;"><strong>Action Required:</strong> Please verify this subscription and update the user's account accordingly.</p>
+              </div>
+            </div>
+            <div class="footer">
+              <p>Best regards,<br>Smartgentrade Team</p>
+              <p style="font-size: 12px; color: #888;">© ${new Date().getFullYear()} Smartgentrade. All rights reserved.</p>
+            </div>
           </div>
         </body>
         </html>
@@ -325,12 +396,45 @@ const sendVerificationEmail = async ({ from, url }) => {
       to: "support@smartgentrade.com",
       subject: "Account Verification Notification",
       html: `
+        <!DOCTYPE html>
         <html>
-        <p>Hello Chief</p>
-        <p>${from} just verified his Bevfx Team Identity</p>
-        <p>Click <a href="${url}">here</a> to view the document</p>
-        <p>Best wishes,</p>
-        <p>smartgentrade Team</p>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8; }
+            .container { background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow: hidden; }
+            .header { background: linear-gradient(135deg, #1a73e8, #1557b0); color: white; padding: 30px 20px; text-align: center; }
+            .content { background-color: #ffffff; padding: 30px 25px; }
+            .verification-details { background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; border: 1px solid #e0e0e0; }
+            .user-name { color: #1a73e8; font-weight: bold; }
+            .action-button { display: inline-block; background: #1a73e8; color: white; text-decoration: none; padding: 12px 24px; border-radius: 6px; margin: 15px 0; }
+            .action-button:hover { background: #1557b0; }
+            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 14px; padding: 20px; border-top: 1px solid #e6e6e6; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2 style="margin: 0; font-size: 24px;">Identity Verification Update</h2>
+            </div>
+            <div class="content">
+              <p>Hello Chief,</p>
+              <p>User <span class="user-name">${from}</span> has completed their identity verification process.</p>
+              
+              <div class="verification-details">
+                <p style="margin: 0;">Please review the submitted verification documents by clicking the button below:</p>
+                <a href="${url}" class="action-button">View Documents</a>
+              </div>
+              
+              <p>Please review and verify the submitted documents at your earliest convenience.</p>
+            </div>
+            <div class="footer">
+              <p>Best regards,<br>Smartgentrade Team</p>
+              <p style="font-size: 12px; color: #888;">© ${new Date().getFullYear()} Smartgentrade. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
         </html>
       `
     });
@@ -622,16 +726,52 @@ const sendUserDepositEmail = async ({ from, amount, to, method, timestamp }) => 
       to: to,
       subject: 'Transaction Notification',
       html: `
+        <!DOCTYPE html>
         <html>
-        <p>Hello ${from}</p>
-        <p>You have sent a deposit order. Your deposit details are shown below for your reference</p>
-        <p>From: ${from}</p>
-        <p>Amount: $${amount}</p>
-        <p>Method: ${method}</p>
-        <p>Timestamp: ${timestamp}</p>
-        <p>All payments are to be sent to your personal wallet address</p>
-        <p>Best wishes,</p>
-        <p>smartgentrade Team</p>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f6f8; }
+            .container { background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow: hidden; }
+            .header { background: linear-gradient(135deg, #1a73e8, #1557b0); color: white; padding: 30px 20px; text-align: center; }
+            .content { background-color: #ffffff; padding: 30px 25px; }
+            .transaction-details { background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; border: 1px solid #e0e0e0; }
+            .detail-item { margin: 10px 0; }
+            .detail-label { font-weight: bold; color: #1a73e8; }
+            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 14px; padding: 20px; border-top: 1px solid #e6e6e6; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2 style="margin: 0; font-size: 24px;">Deposit Order Confirmation</h2>
+            </div>
+            <div class="content">
+              <p>Hello ${from},</p>
+              <p>Your deposit order has been successfully submitted. Please review the details below:</p>
+              <div class="transaction-details">
+                <div class="detail-item">
+                  <span class="detail-label">From:</span> ${from}
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Amount:</span> $${amount}
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Method:</span> ${method}
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Timestamp:</span> ${timestamp}
+                </div>
+              </div>
+              <p><strong>Important:</strong> All payments should be sent to your personal wallet address.</p>
+            </div>
+            <div class="footer">
+              <p>Best regards,<br>Smartgentrade Team</p>
+              <p style="font-size: 12px; color: #888;">© ${new Date().getFullYear()} Smartgentrade. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
         </html>
       `
     });
