@@ -1293,7 +1293,7 @@ router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
       { $set: { "transactions.$.status": "Approved" } }
     );
  await sendDepositApproval({
-      from: "SmartGen <noreply@smartgen.com>",
+      from: user.firstName,
       amount: transaction.amount,
       method: transaction.method,
       timestamp: transaction.timestamp || new Date(),
