@@ -1265,52 +1265,87 @@ router.put("/trades/:tradeId/commandTrade", async (req, res) => {
 //   }
 // });
 router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
-  
-  const { _id } = req.params;
-  const { transactionId } = req.params;
-
-  const user = await UsersDatabase.findOne({ _id });
-
-  if (!user) {
-    res.status(404).json({
-      success: false,
-      status: 404,
-      message: "User not found",
-    });
-
-    return;
-  }
-
   try {
-    const depositsArray = user.transactions;
-    const depositsTx = depositsArray.filter(
-      (tx) => tx._id === transactionId
+    const { _id, transactionId } = req.params;
+
+    // Find user making the deposit
+    const user = await UsersDatabase.findById(_id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Find transaction to approve
+    const transaction = user.transactions.find(
+      (tx) => tx._id.toString() === transactionId
     );
 
-    depositsTx[0].status = "Approved";
-    // console.log(withdrawalTx);
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: "Transaction not found",
+      });
+    }
 
-    // const cummulativeWithdrawalTx = Object.assign({}, ...user.withdrawals, withdrawalTx[0])
-    // console.log("cummulativeWithdrawalTx", cummulativeWithdrawalTx);
+    // Prevent re-approving already approved transaction
+    if (transaction.status === "Approved") {
+      return res.status(400).json({
+        success: false,
+        message: "Transaction already approved",
+      });
+    }
 
-    await user.updateOne({
-      transactions: [
-        ...user.transactions
-        //cummulativeWithdrawalTx
-      ],
+    // Mark as approved
+    transaction.status = "Approved";
+    await user.save();
+
+    // ✅ Check if this is the user's FIRST approved transaction
+    const approvedTx = user.transactions.filter(
+      (tx) => tx.status === "Approved"
+    );
+    const isFirstTransaction = approvedTx.length === 1;
+
+    // ✅ If first transaction & referredBy exists, reward referrer
+    if (isFirstTransaction && user.referredBy) {
+      const referrer = await UsersDatabase.findById(user.referredBy);
+
+      if (referrer) {
+        const bonus = Number(transaction.amount) * 0.1; // 10% bonus
+
+        // Find this depositor in referrer's referredUsers array
+        const referredUserEntry = referrer.referredUsers.find(
+          (r) => r.newUser.toString() === user._id.toString()
+        );
+
+        if (referredUserEntry) {
+          // Update the earned property
+          referredUserEntry.earned = bonus;
+
+          // Optionally also increase referrer's balance/bonus totals
+          referrer.referralBonus = (referrer.referralBonus || 0) + bonus;
+          referrer.balance = (referrer.balance || 0) + bonus;
+
+          await referrer.save();
+        }
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Transaction approved successfully",
     });
-
-    res.status(200).json({
-      message: "Transaction approved",
-    });
-
-    return;
   } catch (error) {
-    res.status(302).json({
-      message: "Opps! an error occured",
+    console.error("Error approving transaction:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while approving the transaction",
+      error: error.message,
     });
   }
 });
+
 
 router.put("/:_id/transactions/:transactionId/decline", async (req, res) => {
   

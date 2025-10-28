@@ -56,59 +56,69 @@ const otpExpiration = Date.now() + (5 * 60 * 1000); // 5 minutes in milliseconds
 
     // Create a new user with referral information
     const newUser = {
-      firstName,
-      lastName,
-      email,
-      password: hashPassword(password),
-      country,
-      trader:"",
-      phone:phone,
-      amountDeposited: " You are not eligible to view livestream of ongoing trade.Kindly contact your trader or support.",
-      profit: 0,
-      balance: 0,
-      copytrading:0,
-      plan:[],
-      kyc:"unverified",
-      condition:" ",
-      referalBonus: 0,
-      transactions: [],
-      withdrawals: [],
-      planHistory: [],
-     
-      accounts: {
-        eth: {
-          address: "",
-        },
-        ltc: {
-          address: "",
-        },
-        btc: {
-          address: "",
-        },
-        usdt: {
-          address: "",
-        },
-      },
-      verified: false,
-      isDisabled: false,
-      referredUsers:[],
-      copyTradingActive:[],
-      rewards: [
-        { id: 'welcome', title: 'Welcome Bonus', description: 'Sign up and verify your account', amount: 25.00, claimed: false },
-        { id: 'first-deposit', title: 'First Deposit', description: 'Make your first deposit of $100+', amount: 50.00, claimed: false },
-        { id: 'first-trade', title: 'First Trade', description: 'Execute your first trade', amount: 10.00, claimed: false },
-        { id: 'weekly-trader', title: 'Weekly Trader', description: 'Complete 10 trades this week', amount: 100.00, claimed: false },
-        { id: 'copy-trading', title: 'Copy Trading Master', description: 'Follow 3 master traders', amount: 75.00, claimed: false }
-      ],
-      referralCode: generateReferralCode(6), // Generate a referral code for the new user
-      referredBy:null, // Store the ID of the referrer if applicable
-    };
+  firstName,
+  lastName,
+  email,
+  password: hashPassword(password),
+  country,
+  trader: "",
+  phone,
+  amountDeposited: "You are not eligible to view livestream of ongoing trade. Kindly contact your trader or support.",
+  profit: 0,
+  balance: 0,
+  copytrading: 0,
+  plan: [],
+  kyc: "unverified",
+  condition: "",
+  referalBonus: 0,
+  transactions: [],
+  withdrawals: [],
+  planHistory: [],
 
-    if (referrer) {
-      newUser.referredBy=referrer.firstName;
-      referrer.referredUsers.push(newUser.firstName);
-      await referrer.save();
-    }
+  accounts: {
+    eth: { address: "" },
+    ltc: { address: "" },
+    btc: { address: "" },
+    usdt: { address: "" },
+  },
+
+  verified: false,
+  isDisabled: false,
+  referredUsers: [],
+  copyTradingActive: [],
+
+  rewards: [
+    { id: "welcome", title: "Welcome Bonus", description: "Sign up and verify your account", amount: 25.0, claimed: false },
+    { id: "first-deposit", title: "First Deposit", description: "Make your first deposit of $100+", amount: 50.0, claimed: false },
+    { id: "first-trade", title: "First Trade", description: "Execute your first trade", amount: 10.0, claimed: false },
+    { id: "weekly-trader", title: "Weekly Trader", description: "Complete 10 trades this week", amount: 100.0, claimed: false },
+    { id: "copy-trading", title: "Copy Trading Master", description: "Follow 3 master traders", amount: 75.0, claimed: false },
+  ],
+
+  referralCode: generateReferralCode(6), // generate a unique code like 'A1B2C3'
+  referredBy: null, // default if no referral used
+};
+
+// ✅ Handle referral relationship properly
+if (referrer) {
+  newUser.referredBy = referrer._id;
+
+  // Save temporarily so _id exists for newUser
+  const savedUser = await new UsersDatabase(newUser).save();
+
+  referrer.referredUsers.push({
+    dateJoined: new Date(),
+    newUser: savedUser._id,
+    name:savedUser.firstName +" "+lastName,
+    status: "active",
+    earned: 0,
+  });
+
+  await referrer.save();
+} else {
+  await new UsersDatabase(newUser).save();
+}
+
 
     // Generate a referral code for the new user only if referralCode is provided
     // if (referralCode) {
