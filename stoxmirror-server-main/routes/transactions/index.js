@@ -1579,59 +1579,57 @@ router.post("/:_id/withdrawal", async (req, res) => {
 // });
 
 router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
-  
-  const { _id } = req.params;
-  const { transactionId } = req.params;
-
-  const user = await UsersDatabase.findOne({ _id });
-
-  if (!user) {
-    res.status(404).json({
-      success: false,
-      status: 404,
-      message: "User not found",
-    });
-
-    return;
-  }
-
   try {
-    const withdrawalsArray = user.withdrawals;
-    const withdrawalTx = withdrawalsArray.filter(
-      (tx) => tx._id === transactionId
+    const { _id, transactionId } = req.params;
+
+    const user = await UsersDatabase.findById(_id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Find withdrawal transaction
+    const withdrawalTx = user.withdrawals.find(
+      (tx) => tx._id.toString() === transactionId
     );
 
-    withdrawalTx[0].status = "Approved";
-    // console.log(withdrawalTx);
+    if (!withdrawalTx) {
+      return res.status(404).json({
+        success: false,
+        message: "Withdrawal not found",
+      });
+    }
 
-    // const cummulativeWithdrawalTx = Object.assign({}, ...user.withdrawals, withdrawalTx[0])
-    // console.log("cummulativeWithdrawalTx", cummulativeWithdrawalTx);
+    // Mark as approved
+    withdrawalTx.status = "Approved";
+    await user.save();
 
-    await user.updateOne({
-      withdrawals: [
-        ...user.withdrawals
-        //cummulativeWithdrawalTx
-      ],
-    });
-
+    // ✅ Send response FIRST
     res.status(200).json({
-      message: "Transaction approved",
+      success: true,
+      message: "Withdrawal approved",
     });
 
+    // ✅ Then send email (without blocking or awaiting it)
     sendWithdrawalApproval({
-       from:user.firstName+ " "+user.lastName,          // User name
-  amount: amount,            // Amount withdrawn
-  method:method,   // Withdrawal method
-  timestamp: new Date().toLocaleString(), // Approval time
-  to: user.email // User email
+      from: `${user.firstName} ${user.lastName}`,
+      amount: withdrawalTx.amount,
+      method: withdrawalTx.method,
+      timestamp: new Date().toLocaleString(),
+      to: user.email,
+    }).catch((err) => console.error("Email send failed:", err));
 
-}
-    )
-    return;
   } catch (error) {
-    res.status(302).json({
-      message: "Opps! an error occured",
-    });
+    console.error("Error approving withdrawal:", error);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while approving withdrawal",
+      });
+    }
   }
 });
 
