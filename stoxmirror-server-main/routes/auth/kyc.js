@@ -7,6 +7,7 @@ const Image = mongoose.model('Image', {
   imageUrl: String,
   owner: String,
   docNum: String,
+  ownerdet:String,
 });
 
 // Middleware to parse JSON in requests
