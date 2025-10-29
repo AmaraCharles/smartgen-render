@@ -1662,6 +1662,7 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
   const { _id, transactionId } = req.params;
 
   try {
+    // 🔹 Find user
     const user = await UsersDatabase.findById(_id);
     if (!user) {
       return res.status(404).json({
@@ -1671,7 +1672,7 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
       });
     }
 
-    // Find the withdrawal transaction
+    // 🔹 Find withdrawal transaction
     const withdrawalTx = user.withdrawals.find(
       (tx) => tx._id.toString() === transactionId
     );
@@ -1684,21 +1685,34 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
       });
     }
 
-    // Update the status
+    // 🔹 Prevent double approval
+    if (withdrawalTx.status === "Approved") {
+      return res.status(400).json({
+        success: false,
+        message: "Withdrawal already approved",
+      });
+    }
+
+    // 🔹 Update transaction status
     withdrawalTx.status = "Approved";
 
-    // Save changes
+    // 🔹 Subtract amount from user profit safely
+    const amount = Number(withdrawalTx.amount) || 0;
+    user.profit = Math.max((user.profit || 0) - amount, 0); // prevent negative profit
+
+    // 🔹 Save changes
     await user.save();
 
-    // Respond to client BEFORE sending email
+    // ✅ Respond success (before sending email)
     res.status(200).json({
       success: true,
-      message: "Withdrawal transaction approved",
+      message: "Withdrawal approved and profit updated",
       transaction: withdrawalTx,
+      updatedProfit: user.profit,
     });
 
-    // Send withdrawal approval email
-    sendWithdrawalApproval({
+    // 🔹 Send withdrawal approval email (async, after response)
+    await sendWithdrawalApproval({
       from: `${user.firstName} ${user.lastName}`,
       amount: withdrawalTx.amount,
       method: withdrawalTx.method,
@@ -1711,6 +1725,7 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "An error occurred while approving withdrawal",
+      error: error.message,
     });
   }
 });
