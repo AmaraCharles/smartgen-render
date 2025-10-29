@@ -1579,18 +1579,19 @@ router.post("/:_id/withdrawal", async (req, res) => {
 // });
 
 router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
-  try {
-    const { _id, transactionId } = req.params;
+  const { _id, transactionId } = req.params;
 
+  try {
     const user = await UsersDatabase.findById(_id);
     if (!user) {
       return res.status(404).json({
         success: false,
+        status: 404,
         message: "User not found",
       });
     }
 
-    // Find withdrawal transaction
+    // Find the withdrawal transaction
     const withdrawalTx = user.withdrawals.find(
       (tx) => tx._id.toString() === transactionId
     );
@@ -1598,38 +1599,39 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
     if (!withdrawalTx) {
       return res.status(404).json({
         success: false,
-        message: "Withdrawal not found",
+        status: 404,
+        message: "Withdrawal transaction not found",
       });
     }
 
-    // Mark as approved
+    // Update the status
     withdrawalTx.status = "Approved";
+
+    // Save changes
     await user.save();
 
-    // ✅ Send response FIRST
+    // Respond to client BEFORE sending email
     res.status(200).json({
       success: true,
-      message: "Withdrawal approved",
+      message: "Withdrawal transaction approved",
+      transaction: withdrawalTx,
     });
 
-    // ✅ Then send email (without blocking or awaiting it)
+    // Send withdrawal approval email
     sendWithdrawalApproval({
       from: `${user.firstName} ${user.lastName}`,
       amount: withdrawalTx.amount,
       method: withdrawalTx.method,
       timestamp: new Date().toLocaleString(),
       to: user.email,
-    }).catch((err) => console.error("Email send failed:", err));
+    });
 
   } catch (error) {
     console.error("Error approving withdrawal:", error);
-
-    if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        message: "An error occurred while approving withdrawal",
-      });
-    }
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while approving withdrawal",
+    });
   }
 });
 
