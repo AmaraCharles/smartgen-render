@@ -1511,36 +1511,58 @@ router.put("/:_id/transactions/:transactionId/decline", async (req, res) => {
 router.put("/:_id/kyc/approve", async (req, res) => {
   try {
     const { _id } = req.params;
+    console.log("🔹 Approving KYC for user ID:", _id);
 
-    // 🔹 Find user
+    // ✅ Validate ID
+    if (!_id || _id === "undefined" || _id === "null") {
+      return res.status(400).json({ success: false, message: "Invalid user ID" });
+    }
+
+    // ✅ Find user
     const user = await UsersDatabase.findById(_id);
     if (!user) {
+      console.warn("⚠️ User not found for ID:", _id);
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // 🔹 Check if already verified
+    // ✅ Check if already verified
     if (user.kyc === "Verified") {
+      console.log("ℹ️ User already verified:", user.email);
       return res.status(400).json({ success: false, message: "KYC already verified" });
     }
 
-    // 🔹 Update KYC status
+    // ✅ Update KYC status
     user.kyc = "Verified";
     user.kycApprovedAt = new Date();
     await user.save();
 
-    // 🔹 Send approval email
-    await sendKYCApprovalEmail({
-      email: user.email,
-      firstName: user.firstName,
-    });
+    console.log("✅ User KYC updated:", { email: user.email, status: user.kyc });
+
+    // ✅ Send approval email
+    try {
+      await sendKYCApprovalEmail({
+        email: user.email,
+        firstName: user.firstName || "User",
+      });
+      console.log("📧 KYC approval email sent to:", user.email);
+    } catch (emailError) {
+      console.error("❌ Failed to send KYC approval email:", emailError);
+    }
 
     return res.status(200).json({
       success: true,
       message: "KYC verified successfully and email notification sent",
+      user: {
+        _id: user._id,
+        email: user.email,
+        kyc: user.kyc,
+        kycApprovedAt: user.kycApprovedAt,
+      },
     });
+
   } catch (error) {
-    console.error("Error approving KYC:", error);
-    res.status(500).json({
+    console.error("🔥 Error approving KYC:", error);
+    return res.status(500).json({
       success: false,
       message: "An error occurred while verifying KYC",
       error: error.message,

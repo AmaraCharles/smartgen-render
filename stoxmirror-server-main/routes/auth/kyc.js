@@ -24,7 +24,7 @@ router.post('/kyc', async (req, res) => {
     await image.save();
 sendKycAlert({owner})
     res.status(201).json({ message: 'Image URL stored successfully' });
-    sendKycAlert({ imageUrl, owner, docNum,ownerdet })
+    
   } catch (error) {
     console.error('Error storing image URL:', error);
     res.status(500).json({ error: 'Internal Server Error' });
