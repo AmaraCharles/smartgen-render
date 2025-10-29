@@ -1274,7 +1274,7 @@ router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Check if transaction exists
+    // Find transaction
     const transaction = user.transactions.find(
       (tx) => tx._id.toString() === transactionId
     );
@@ -1287,35 +1287,34 @@ router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
       return res.status(400).json({ success: false, message: "Transaction already approved" });
     }
 
-    // ✅ Update the nested transaction directly
+    // ✅ Update transaction status to Approved
     await UsersDatabase.updateOne(
       { _id, "transactions._id": transactionId },
       { $set: { "transactions.$.status": "Approved" } }
     );
-    const userx = await UsersDatabase.findById(_id);
-    
- await sendDepositApproval({
-      from: userx.firstName,
+
+    // ✅ Increment user balance by transaction amount
+    user.balance = (user.balance || 0) + Number(transaction.amount);
+    await user.save();
+
+    // ✅ Send deposit approval notification
+    await sendDepositApproval({
+      from: user.firstName,
       amount: transaction.amount,
       method: transaction.method,
       timestamp: transaction.timestamp || new Date(),
-      to: user.email, // 👈 user's email as recipient
+      to: user.email,
     });
-    // ✅ Re-fetch updated user
-    const updatedUser = await UsersDatabase.findById(_id);
 
-    // ✅ Check if this is their first approved transaction
-    const approvedTx = updatedUser.transactions.filter(
-      (tx) => tx.status === "Approved"
-    );
+    // ✅ Handle referral bonus if first approved transaction
+    const updatedUser = await UsersDatabase.findById(_id);
+    const approvedTx = updatedUser.transactions.filter((tx) => tx.status === "Approved");
     const isFirstTransaction = approvedTx.length === 1;
 
-    // ✅ Handle referral bonus
     if (isFirstTransaction && updatedUser.referredBy) {
       const referrer = await UsersDatabase.findById(updatedUser.referredBy);
       if (referrer) {
         const bonus = Number(transaction.amount) * 0.1;
-
         const referredUserEntry = referrer.referredUsers.find(
           (r) => r.newUser.toString() === updatedUser._id.toString()
         );
@@ -1331,7 +1330,7 @@ router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Transaction approved successfully",
+      message: "Transaction approved successfully and balance updated",
     });
   } catch (error) {
     console.error("Error approving transaction:", error);
@@ -1342,7 +1341,6 @@ router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
     });
   }
 });
-
 
 
 
