@@ -7,6 +7,8 @@ var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
 const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval,sendWithdrawalApproval,sendKYCApprovalEmail,sendKYCRejectionEmail} = require("../../utils");
 const nodeCrypto = require("crypto");
+import { Resend } from 'resend';
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // If global.crypto is missing or incomplete, polyfill it
 if (!global.crypto) {
@@ -43,7 +45,7 @@ const app=express()
   const runningUsers = await UsersDatabase.find({ "transactions.status": "RUNNING" });
 
   for (const user of runningUsers) {
-    for (const trade of user.planHistory) {
+    for (const trade of user.plan) {
       if (trade.status !== "RUNNING") continue;
 
       // ✅ Normalize ROI
@@ -91,7 +93,7 @@ const app=express()
         // 📧 Send email (using your original template)
         try {
           await transporter.sendMail({
-            from: `"AgriInvest Platform" <${process.env.EMAIL_USER}>`,
+            from: `"Smartgentrade" <${process.env.EMAIL_USER}>`,
             to: user.email,
             subject: "🎉 Your Trade Has Completed Successfully!",
             html: `
