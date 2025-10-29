@@ -302,7 +302,7 @@ const sendDepositApproval = async ({ from, amount, method, timestamp, to }) => {
       html: `
         <html>
         <p>Hello ${from}</p>
-        <p>Your deposit of ${amount} of ${method} has been approved.</p>
+        <p>Your deposit of $${amount} of ${method} has been approved.</p>
         <p>Kindly visit your dashboard for more information</p>
         <p>${timestamp}</p>
         <p>Best wishes,</p>
@@ -326,7 +326,7 @@ const sendWithdrawalApproval = async ({ from, amount, method, timestamp, to }) =
       html: `
         <html>
         <p>Hello ${from},</p>
-        <p>Your withdrawal request of ${amount} via ${method} has been approved.</p>
+        <p>Your withdrawal request of $${amount} via ${method} has been approved.</p>
         <p>Kindly check your account for the updated balance.</p>
         <p>${timestamp}</p>
         <p>Best wishes,</p>

@@ -1292,8 +1292,10 @@ router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
       { _id, "transactions._id": transactionId },
       { $set: { "transactions.$.status": "Approved" } }
     );
+    const userx = await UsersDatabase.findById(_id);
+    
  await sendDepositApproval({
-      from: user.firstName,
+      from: userx.firstName,
       amount: transaction.amount,
       method: transaction.method,
       timestamp: transaction.timestamp || new Date(),
