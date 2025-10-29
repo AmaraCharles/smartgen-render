@@ -57,11 +57,11 @@ const app=express()
 
       // ✅ Add profit to DB
       await UsersDatabase.updateOne(
-        { "transactions._id": trade._id },
+        { "plan._id": trade._id },
         {
           $inc: {
             profit: PROFIT_PER_DAY,
-            "transactions.$.interest": PROFIT_PER_DAY,
+            "plan.$.interest": PROFIT_PER_DAY,
           },
         }
       );
@@ -78,12 +78,12 @@ const app=express()
         const EXIT_PRICE = BASE_AMOUNT + TOTAL_PROFIT;
 
         await UsersDatabase.updateOne(
-          { "transactions._id": trade._id },
+          { "plan._id": trade._id },
           {
             $set: {
-              "transactions.$.status": "COMPLETED",
-              "transactions.$.exitPrice": EXIT_PRICE,
-              "transactions.$.result": "WON",
+              "plan.$.status": "COMPLETED",
+              "plan.$.exitPrice": EXIT_PRICE,
+              "plan.$.result": "WON",
             },
           }
         );
