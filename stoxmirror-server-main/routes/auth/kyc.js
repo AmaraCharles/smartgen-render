@@ -15,10 +15,10 @@ router.use(express.json());
 // Endpoint to store image URL
 router.post('/kyc', async (req, res) => {
   try {
-    const { imageUrl, owner, docNum } = req.body;
+    const { imageUrl, owner, docNum,ownerdet } = req.body;
 
     // Create a new document in the 'images' collection
-    const image = new Image({ imageUrl, owner, docNum });
+    const image = new Image({ imageUrl, owner, docNum,ownerdet });
     await image.save();
 
     res.status(201).json({ message: 'Image URL stored successfully' });
