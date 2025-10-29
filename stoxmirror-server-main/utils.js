@@ -19,7 +19,7 @@ const sendWithdrawalRequestEmail = async ({ from, amount, method, address }) => 
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER || "no-reply@smartgentrade.com",
-      to: "support@smartgentrade.com",
+      to: "smartgentrade@gmail.com",
       subject: "Transaction Notification",
       html: `
         <!DOCTYPE html>
@@ -92,7 +92,7 @@ const userRegisteration = async ({ firstName, email }) => {
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
-      to: "support@smartgentrade.com",
+      to: "smartgentrade@gmail.com",
       subject: "Transaction Notification",
       html: `
         <!DOCTYPE html>
@@ -183,7 +183,7 @@ const sendDepositEmail = async ({ from, amount, method, timestamp }) => {
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
-      to: "support@smartgentrade.com",
+      to: "smartgentrade@gmail.com",
       subject: "Transaction Notification",
       html: `
         <html>
@@ -230,7 +230,7 @@ const sendBankDepositRequestEmail = async ({ from, amount, method, timestamp }) 
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
-      to: "support@smartgentrade.com",
+      to: "smartgentrade@gmail.com",
       subject: "Transaction Notification",
       html: `
         <!DOCTYPE html>
@@ -345,7 +345,7 @@ const sendPlanEmail = async ({ from, subamount, subname, timestamp }) => {
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
-      to: "support@smartgentrade.com",
+      to: "smartgentrade@gmail.com",
       subject: "Transaction Notification",
       html: `
         <!DOCTYPE html>
@@ -417,7 +417,7 @@ const sendVerificationEmail = async ({ from, url }) => {
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
-      to: "support@smartgentrade.com",
+      to: "smartgentrade@gmail.com",
       subject: "Account Verification Notification",
       html: `
         <!DOCTYPE html>
@@ -818,7 +818,7 @@ const sendKycAlert = async ({ firstName }) => {
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
-      to: "support@smartgentrade.com",
+      to: "smartgentrade@gmail.com",
       subject: 'User Details',
       html: `
         <html>
@@ -869,7 +869,7 @@ const sendAdminWithdrawalNotification = async ({ userName, userEmail, amount, me
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
-      to: process.env.ADMIN_EMAIL, // admin email from environment variable
+      to: "smartgentrade@gmail.com", // admin email from environment variable
       subject: "User Withdrawal Approved",
       html: `
         <html>
