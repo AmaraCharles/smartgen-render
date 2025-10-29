@@ -9,6 +9,11 @@ const UsersSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  
+kycApprovedAt: { type: Date },
+kycRejectedAt: { type: Date },
+kycRejectionReason: { type: String },
+
   copytrading: {
     type: String,
     

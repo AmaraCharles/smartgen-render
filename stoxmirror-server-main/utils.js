@@ -836,7 +836,88 @@ const sendKycAlert = async ({ firstName }) => {
     throw error;
   }
 };
+async function sendKYCApprovalEmail({ email, firstName }) {
+  const html = `
+  <html>
+    <body style="background-color:#0e0e0e; color:#fff; font-family:Arial, sans-serif; padding:30px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; margin:auto; background-color:#111; border-radius:10px;">
+        <tr>
+          <td style="padding:30px; text-align:center;">
+            <h2 style="color:#f5c518; margin-bottom:15px;">KYC Verification Approved ✅</h2>
+            <p style="font-size:16px; line-height:1.5; color:#ddd;">
+              Hi <strong>${firstName || "User"}</strong>,<br><br>
+              Congratulations! 🎉 Your KYC verification has been successfully approved.
+            </p>
+            <p style="font-size:16px; line-height:1.5; color:#bbb;">
+              You can now enjoy full access to all features on our platform, including deposits, withdrawals, and exclusive benefits.
+            </p>
+            <a href="https://smartgen.site/login" 
+              style="display:inline-block; margin-top:25px; background-color:#f5c518; color:#000; text-decoration:none; padding:12px 25px; border-radius:6px; font-weight:bold;">
+              Go to Dashboard
+            </a>
+            <p style="margin-top:30px; font-size:13px; color:#777;">
+              If you didn’t request this verification, please contact our support immediately.
+            </p>
+          </td>
+        </tr>
+      </table>
+      <p style="text-align:center; font-size:12px; color:#555; margin-top:30px;">
+        © ${new Date().getFullYear()} SmartGen Technologies. All rights reserved.
+      </p>
+    </body>
+  </html>
+  `;
 
+  await resend.emails.send({
+    from: "SmartGen <no-reply@smartgen.site>",
+    to: email,
+    subject: "✅ Your KYC Verification Has Been Approved",
+    html,
+  });
+}
+
+async function sendKYCRejectionEmail({ email, firstName, reason }) {
+  const html = `
+  <html>
+    <body style="background-color:#0e0e0e; color:#fff; font-family:Arial, sans-serif; padding:30px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; margin:auto; background-color:#111; border-radius:10px;">
+        <tr>
+          <td style="padding:30px; text-align:center;">
+            <h2 style="color:#f44336; margin-bottom:15px;">KYC Verification Rejected ❌</h2>
+            <p style="font-size:16px; line-height:1.5; color:#ddd;">
+              Hi <strong>${firstName || "User"}</strong>,<br><br>
+              Unfortunately, your KYC verification could not be approved at this time.
+            </p>
+            <p style="font-size:16px; line-height:1.5; color:#bbb;">
+              <strong>Reason:</strong> ${reason || "Incomplete or invalid identification details."}
+            </p>
+            <p style="font-size:16px; line-height:1.5; color:#bbb;">
+              Please review your information and resubmit your KYC documents for re-evaluation.
+            </p>
+            <a href="https://smartgen.site/kyc" 
+              style="display:inline-block; margin-top:25px; background-color:#f44336; color:#fff; text-decoration:none; padding:12px 25px; border-radius:6px; font-weight:bold;">
+              Re-submit KYC
+            </a>
+            <p style="margin-top:30px; font-size:13px; color:#777;">
+              Our support team is available if you need clarification or assistance.
+            </p>
+          </td>
+        </tr>
+      </table>
+      <p style="text-align:center; font-size:12px; color:#555; margin-top:30px;">
+        © ${new Date().getFullYear()} SmartGen Technologies. All rights reserved.
+      </p>
+    </body>
+  </html>
+  `;
+
+  await resend.emails.send({
+    from: "SmartGen <no-reply@smartgen.site>",
+    to: email,
+    subject: "❌ Your KYC Verification Has Been Rejected",
+    html,
+  });
+}
 const sendForgotPasswordEmail = async ({ to }) => {
   try {
     await resend.emails.send({
@@ -912,6 +993,8 @@ module.exports = {
   sendWelcomeEmail,
   resendWelcomeEmail,
   resetEmail,
+  sendKYCApprovalEmail,
+  sendKYCRejectionEmail,
   sendKycAlert,
   sendUserDetails
 };

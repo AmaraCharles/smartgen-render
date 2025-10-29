@@ -5,7 +5,7 @@ var express = require("express");
 
 var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
-const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval,sendWithdrawalApproval } = require("../../utils");
+const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval,sendWithdrawalApproval,sendKYCApprovalEmail,sendKYCRejectionEmail} = require("../../utils");
 const nodeCrypto = require("crypto");
 
 // If global.crypto is missing or incomplete, polyfill it
@@ -604,6 +604,48 @@ router.post("/:_id/Tdeposit", async (req, res) => {
       success: false,
       status: 500,
       message: "Internal server error",
+    });
+  }
+});
+router.put("/:_id/kyc/reject", async (req, res) => {
+  try {
+    const { _id } = req.params;
+    const { reason } = req.body; // optional rejection reason
+
+    // 🔹 Find user
+    const user = await UsersDatabase.findById(_id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // 🔹 Check if already rejected
+    if (user.kyc === "Rejected") {
+      return res.status(400).json({ success: false, message: "KYC already rejected" });
+    }
+
+    // 🔹 Update KYC status
+    user.kyc = "Rejected";
+    user.kycRejectedAt = new Date();
+    user.kycRejectionReason = reason || "Your KYC details did not meet our verification requirements.";
+    await user.save();
+
+    // 🔹 Send rejection email
+    await sendKYCRejectionEmail({
+      email: user.email,
+      firstName: user.firstName,
+      reason: user.kycRejectionReason,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "KYC rejected successfully and email notification sent",
+    });
+  } catch (error) {
+    console.error("Error rejecting KYC:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while rejecting the KYC",
+      error: error.message,
     });
   }
 });
@@ -1392,7 +1434,45 @@ router.put("/:_id/transactions/:transactionId/decline", async (req, res) => {
   }
 });
 
+router.put("/:_id/kyc/approve", async (req, res) => {
+  try {
+    const { _id } = req.params;
 
+    // 🔹 Find user
+    const user = await UsersDatabase.findById(_id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // 🔹 Check if already verified
+    if (user.kyc === "Verified") {
+      return res.status(400).json({ success: false, message: "KYC already verified" });
+    }
+
+    // 🔹 Update KYC status
+    user.kyc = "Verified";
+    user.kycApprovedAt = new Date();
+    await user.save();
+
+    // 🔹 Send approval email
+    await sendKYCApprovalEmail({
+      email: user.email,
+      firstName: user.firstName,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "KYC verified successfully and email notification sent",
+    });
+  } catch (error) {
+    console.error("Error approving KYC:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while verifying KYC",
+      error: error.message,
+    });
+  }
+});
 
 router.get("/:_id/deposit/history", async (req, res) => {
   const { _id } = req.params;
