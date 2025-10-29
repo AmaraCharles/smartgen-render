@@ -1,7 +1,7 @@
-const UsersDatabase = require("../../models/User");
+
 var express = require("express");
 // const { v4: uuidv4 } = require("uuid");
-
+const UsersDatabase = require("../../models/User");
 
 var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
