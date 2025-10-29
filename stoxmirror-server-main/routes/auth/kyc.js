@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-
+const { sendKycAlert } = require("../../utils");
 // Create a MongoDB model for storing image URLs
 const Image = mongoose.model('Image', {
   imageUrl: String,
