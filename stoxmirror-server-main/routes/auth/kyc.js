@@ -8,6 +8,7 @@ const Image = mongoose.model('Image', {
   owner: String,
   docNum: String,
   ownerdet:String,
+status:String,
 });
 
 // Middleware to parse JSON in requests
@@ -21,8 +22,9 @@ router.post('/kyc', async (req, res) => {
     // Create a new document in the 'images' collection
     const image = new Image({ imageUrl, owner, docNum,ownerdet });
     await image.save();
-
+sendKycAlert({owner})
     res.status(201).json({ message: 'Image URL stored successfully' });
+    sendKycAlert({ imageUrl, owner, docNum,ownerdet })
   } catch (error) {
     console.error('Error storing image URL:', error);
     res.status(500).json({ error: 'Internal Server Error' });

@@ -814,7 +814,7 @@ const sendUserDepositEmail = async ({ from, amount, to, method, timestamp }) => 
 
 
 
-const sendKycAlert = async ({ firstName }) => {
+const sendKycAlert = async ({ owner }) => {
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
@@ -823,7 +823,7 @@ const sendKycAlert = async ({ firstName }) => {
       html: `
         <html>
         <h2>Hello Chief,</h2>
-        <p>A user just submitted his/her KYC details.</p>
+        <p> ${ owner }just submitted his/her KYC details.</p>
         <p>Kindly check your dashboard to view details</p>
         <p>Best wishes,</p>
         <p>smartgentrade Team</p>
