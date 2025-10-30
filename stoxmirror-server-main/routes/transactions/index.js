@@ -7,8 +7,9 @@ var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
 const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval,sendWithdrawalApproval,sendKYCApprovalEmail,sendKYCRejectionEmail} = require("../../utils");
 const nodeCrypto = require("crypto");
-import { Resend } from 'resend';
+const { Resend } = require("resend");
 const resend = new Resend(process.env.RESEND_API_KEY);
+
 
 // If global.crypto is missing or incomplete, polyfill it
 if (!global.crypto) {
