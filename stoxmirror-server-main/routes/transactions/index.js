@@ -58,7 +58,7 @@ const app=express()
 
       // Add profit to user and plan
       user.profit = (user.profit || 0) + PROFIT_PER_DAY;
-      trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
+      trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
 
       await user.save();
 
@@ -84,7 +84,7 @@ const app=express()
         // Send completion email via Resend
         try {
           await resend.emails.send({
-            from: "Smartgentrade <no-reply@smartgentrade.com>",
+            from: "Smartgentrade <smartgentrade@gmail.com>",
             to: user.email,
             subject: "🎉 Your Trade Has Completed Successfully!",
             html: `
