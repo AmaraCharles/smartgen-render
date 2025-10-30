@@ -62,7 +62,7 @@ const app=express()
         {
           $inc: {
             profit: PROFIT_PER_DAY,
-            "plan.$.profit": PROFIT_PER_DAY,
+            "plan.$.totalProfit": PROFIT_PER_DAY,
           },
         }
       );
