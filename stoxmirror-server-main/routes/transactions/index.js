@@ -43,58 +43,48 @@ const app=express()
  async function runDailyProfitJob() {
   console.log("⏰ Running daily profit job...");
 
-  const runningUsers = await UsersDatabase.find({ "transactions.status": "RUNNING" });
+  const runningUsers = await UsersDatabase.find({ "plan.status": "RUNNING" });
 
   for (const user of runningUsers) {
     for (const trade of user.plan) {
       if (trade.status !== "RUNNING") continue;
 
-      // ✅ Normalize ROI
+      // Normalize daily profit rate
       let DAILY_PERCENTAGE = Number(trade.dailyProfitRate);
       DAILY_PERCENTAGE = DAILY_PERCENTAGE > 1 ? DAILY_PERCENTAGE / 100 : DAILY_PERCENTAGE;
 
       const BASE_AMOUNT = Number(trade.amount) || 0;
       const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
 
-      // ✅ Add profit to DB
-      await UsersDatabase.updateOne(
-        { "plan._id": trade._id },
-        {
-          $inc: {
-            profit: PROFIT_PER_DAY,
-            "plan.$.totalProfit": PROFIT_PER_DAY,
-          },
-        }
-      );
+      // Add profit to user and plan
+      user.profit = (user.profit || 0) + PROFIT_PER_DAY;
+      trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
+
+      await user.save();
 
       console.log(`💰 Added ${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (trade ${trade._id})`);
 
-      // ⏳ Close trade after 90 days
+      // Close trade after 90 days
       const start = new Date(trade.startTime);
       const now = new Date();
       const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
 
       if (diffDays >= 90) {
-        const TOTAL_PROFIT = PROFIT_PER_DAY * 90;
+        const TOTAL_PROFIT = trade.totalProfit;
         const EXIT_PRICE = BASE_AMOUNT + TOTAL_PROFIT;
 
-        await UsersDatabase.updateOne(
-          { "plan._id": trade._id },
-          {
-            $set: {
-              "plan.$.status": "COMPLETED",
-              "plan.$.exitPrice": EXIT_PRICE,
-              "plan.$.result": "WON",
-            },
-          }
-        );
+        trade.status = "COMPLETED";
+        trade.exitPrice = EXIT_PRICE;
+        trade.result = "WON";
+
+        await user.save();
 
         console.log(`✅ Trade ${trade._id} completed for user ${user._id}`);
 
-        // 📧 Send email (using your original template)
+        // Send completion email via Resend
         try {
-          await transporter.sendMail({
-            from: `"Smartgentrade" <${process.env.EMAIL_USER}>`,
+          await resend.emails.send({
+            from: "Smartgentrade <no-reply@smartgentrade.com>",
             to: user.email,
             subject: "🎉 Your Trade Has Completed Successfully!",
             html: `
@@ -109,7 +99,7 @@ const app=express()
           });
           console.log(`📧 Completion email sent to ${user.email}`);
         } catch (err) {
-          console.error("❌ Failed to send email:", err);
+          console.error("❌ Failed to send email via Resend:", err);
         }
       }
     }
