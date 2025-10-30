@@ -50,7 +50,7 @@ const app=express()
       if (trade.status !== "RUNNING") continue;
 
       // ✅ Normalize ROI
-      let DAILY_PERCENTAGE = Number(trade.roi);
+      let DAILY_PERCENTAGE = Number(trade.dailyProfitRate);
       DAILY_PERCENTAGE = DAILY_PERCENTAGE > 1 ? DAILY_PERCENTAGE / 100 : DAILY_PERCENTAGE;
 
       const BASE_AMOUNT = Number(trade.amount) || 0;
