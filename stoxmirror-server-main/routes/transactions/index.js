@@ -46,6 +46,8 @@ const app=express()
   const runningUsers = await UsersDatabase.find({ "plan.status": "RUNNING" });
 
   for (const user of runningUsers) {
+    let userModified = false;
+
     for (const trade of user.plan) {
       if (trade.status !== "RUNNING") continue;
 
@@ -56,28 +58,26 @@ const app=express()
       const BASE_AMOUNT = Number(trade.amount) || 0;
       const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
 
-      // Add profit to user and plan
+      // Add profit to user and trade
       user.profit = (user.profit || 0) + PROFIT_PER_DAY;
       trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
-
-      await user.save();
+      userModified = true;
 
       console.log(`💰 Added ${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (trade ${trade._id})`);
 
-      // Close trade after 90 days
+      // Check trade duration (close after 90 days)
       const start = new Date(trade.startTime);
       const now = new Date();
       const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
 
       if (diffDays >= 90) {
-        const TOTAL_PROFIT = trade.totalProfit;
+        const TOTAL_PROFIT = trade.totalProfit || trade.profit || 0;
         const EXIT_PRICE = BASE_AMOUNT + TOTAL_PROFIT;
 
         trade.status = "COMPLETED";
         trade.exitPrice = EXIT_PRICE;
         trade.result = "WON";
-
-        await user.save();
+        userModified = true;
 
         console.log(`✅ Trade ${trade._id} completed for user ${user._id}`);
 
@@ -103,8 +103,15 @@ const app=express()
         }
       }
     }
+
+    if (userModified) {
+      user.markModified("plan");
+      await user.save();
+      console.log(`💾 Saved updated data for user ${user._id}`);
+    }
   }
 }
+
 
 router.post("/:_id/deposit", async (req, res) => {
   const { _id } = req.params;
