@@ -43,7 +43,7 @@ const app=express()
  async function runDailyProfitJob() {
   console.log("⏰ Running daily profit job...");
 
-  const runningUsers = await UsersDatabase.find({ "plan.status": "RUNNING" });
+  const runningUsers = await UsersDatabase.find({ "plan.status": "active" });
 
   for (const user of runningUsers) {
     let userModified = false;
