@@ -48,7 +48,14 @@ const app=express()
   for (const user of runningUsers) {
     let userModified = false;
 
-    for (const trade of user.plan) {
+    // Initialize user profit if not exists
+    if (typeof user.profit === 'undefined') {
+      user.profit = 0;
+      userModified = true;
+    }
+
+    for (let i = 0; i < user.plan.length; i++) {
+      const trade = user.plan[i];
       if (trade.status !== "RUNNING") continue;
 
       // Normalize daily profit rate
@@ -59,8 +66,8 @@ const app=express()
       const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
 
       // Add profit to user and trade
-      user.profit = (user.profit || 0) + PROFIT_PER_DAY;
-      trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
+      user.profit += PROFIT_PER_DAY;
+      user.plan[i].profit = (trade.profit || 0) + PROFIT_PER_DAY;
       userModified = true;
 
       console.log(`💰 Added ${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (trade ${trade._id})`);
