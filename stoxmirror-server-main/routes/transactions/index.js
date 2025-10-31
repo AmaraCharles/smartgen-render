@@ -97,7 +97,7 @@ async function runDailyProfitJob() {
         // Send completion email
         try {
           await resend.emails.send({
-            from: "Smartgentrade <smartgentrade@gmail.com>",
+            from: "Smartgentrade <support@smartgentrade.com>",
             to: user.email,
             subject: "🎉 Your Trade Has Completed Successfully!",
             html: `
@@ -121,7 +121,7 @@ async function runDailyProfitJob() {
     if (totalDailyProfit > 0) {
       try {
         await resend.emails.send({
-          from: "Smartgentrade <smartgentrade@gmail.com>",
+          from: "Smartgentrade <support@smartgentrade.com>",
           to: user.email,
           subject: "💸 Daily Profit Added to Your Account!",
           html: `
