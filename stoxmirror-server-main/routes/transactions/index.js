@@ -43,13 +43,13 @@ const app=express()
 async function runDailyProfitJob() {
   console.log("⏰ Running daily profit job...");
 
-  // Fetch users who have at least one active plan
   const runningUsers = await UsersDatabase.find({
     plan: { $elemMatch: { status: "active" } },
   });
 
   for (const user of runningUsers) {
     let userModified = false;
+    let totalDailyProfit = 0;
 
     // Initialize user profit if not exists
     if (typeof user.profit !== "number") {
@@ -59,11 +59,8 @@ async function runDailyProfitJob() {
 
     for (let i = 0; i < user.plan.length; i++) {
       const trade = user.plan[i];
-
-      // Skip if not active
       if (trade.status !== "active") continue;
 
-      // Calculate daily profit
       let DAILY_PERCENTAGE =
         Number(trade.dailyProfitRate) > 1
           ? Number(trade.dailyProfitRate) / 100
@@ -72,15 +69,16 @@ async function runDailyProfitJob() {
       const BASE_AMOUNT = Number(trade.amount) || 0;
       const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
 
-      // Update profit
+      // Update profit values
       user.profit += PROFIT_PER_DAY;
       trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
       trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
       userModified = true;
+      totalDailyProfit += PROFIT_PER_DAY;
 
       console.log(`💰 Added $${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (trade ${trade._id})`);
 
-      // Check if 90 days passed
+      // Check 90-day completion
       const start = new Date(trade.startTime);
       const now = new Date();
       const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
@@ -96,7 +94,7 @@ async function runDailyProfitJob() {
 
         console.log(`✅ Trade ${trade._id} completed for user ${user._id}`);
 
-        // Send email on completion
+        // Send completion email
         try {
           await resend.emails.send({
             from: "Smartgentrade <smartgentrade@gmail.com>",
@@ -104,7 +102,7 @@ async function runDailyProfitJob() {
             subject: "🎉 Your Trade Has Completed Successfully!",
             html: `
               <h2>Congratulations ${user.firstName || "Investor"}!</h2>
-              <p>Your trade <b>${trade._id}</b> has completed successfully after 90 days.</p>
+              <p>Your trade <b>${trade._id}</b> has successfully completed after 90 days.</p>
               <p><b>Initial Amount:</b> $${BASE_AMOUNT.toFixed(2)}</p>
               <p><b>Total Profit Earned:</b> $${TOTAL_PROFIT.toFixed(2)}</p>
               <p><b>Exit Price:</b> $${EXIT_PRICE.toFixed(2)}</p>
@@ -114,12 +112,34 @@ async function runDailyProfitJob() {
           });
           console.log(`📧 Completion email sent to ${user.email}`);
         } catch (err) {
-          console.error("❌ Failed to send Resend email:", err);
+          console.error("❌ Failed to send completion email:", err);
         }
       }
     }
 
-    // Save if modified
+    // Send daily profit email summary
+    if (totalDailyProfit > 0) {
+      try {
+        await resend.emails.send({
+          from: "Smartgentrade <smartgentrade@gmail.com>",
+          to: user.email,
+          subject: "💸 Daily Profit Added to Your Account!",
+          html: `
+            <h2>Hello ${user.firstName || "Investor"},</h2>
+            <p>Great news! You've earned profit today from your active investment plans.</p>
+            <p><b>Today's Profit:</b> $${totalDailyProfit.toFixed(2)}</p>
+            <p><b>Total Profit So Far:</b> $${user.profit.toFixed(2)}</p>
+            <br>
+            <p>Keep your investments running to continue earning daily returns.</p>
+            <p>– The <b>Smartgentrade</b> Team 🚀</p>
+          `,
+        });
+        console.log(`📧 Daily profit email sent to ${user.email} (+$${totalDailyProfit.toFixed(2)})`);
+      } catch (err) {
+        console.error("❌ Failed to send daily profit email:", err);
+      }
+    }
+
     if (userModified) {
       user.markModified("plan");
       await user.save();
@@ -129,6 +149,7 @@ async function runDailyProfitJob() {
 
   console.log("✅ Daily profit job completed successfully!");
 }
+
 
 
 router.get("/run-daily-profit", async (req, res) => {
