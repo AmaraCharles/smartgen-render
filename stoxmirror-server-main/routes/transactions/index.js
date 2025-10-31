@@ -40,39 +40,47 @@ const { v4: uuidv4 } = require("uuid");
 const app=express()
 
 
- async function runDailyProfitJob() {
+async function runDailyProfitJob() {
   console.log("⏰ Running daily profit job...");
 
-  const runningUsers = await UsersDatabase.find({ "plan.status": "active" });
+  // Fetch users who have at least one active plan
+  const runningUsers = await UsersDatabase.find({
+    plan: { $elemMatch: { status: "active" } },
+  });
 
   for (const user of runningUsers) {
     let userModified = false;
 
     // Initialize user profit if not exists
-    if (typeof user.profit === 'undefined') {
+    if (typeof user.profit !== "number") {
       user.profit = 0;
       userModified = true;
     }
 
     for (let i = 0; i < user.plan.length; i++) {
       const trade = user.plan[i];
-      if (trade.status !== "RUNNING") continue;
 
-      // Normalize daily profit rate
-      let DAILY_PERCENTAGE = Number(trade.dailyProfitRate);
-      DAILY_PERCENTAGE = DAILY_PERCENTAGE > 1 ? DAILY_PERCENTAGE / 100 : DAILY_PERCENTAGE;
+      // Skip if not active
+      if (trade.status !== "active") continue;
+
+      // Calculate daily profit
+      let DAILY_PERCENTAGE =
+        Number(trade.dailyProfitRate) > 1
+          ? Number(trade.dailyProfitRate) / 100
+          : Number(trade.dailyProfitRate);
 
       const BASE_AMOUNT = Number(trade.amount) || 0;
       const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
 
-      // Add profit to user and trade
+      // Update profit
       user.profit += PROFIT_PER_DAY;
-      user.plan[i].profit = (trade.profit || 0) + PROFIT_PER_DAY;
+      trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
+      trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
       userModified = true;
 
-      console.log(`💰 Added ${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (trade ${trade._id})`);
+      console.log(`💰 Added $${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (trade ${trade._id})`);
 
-      // Check trade duration (close after 90 days)
+      // Check if 90 days passed
       const start = new Date(trade.startTime);
       const now = new Date();
       const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
@@ -81,14 +89,14 @@ const app=express()
         const TOTAL_PROFIT = trade.totalProfit || trade.profit || 0;
         const EXIT_PRICE = BASE_AMOUNT + TOTAL_PROFIT;
 
-        trade.status = "COMPLETED";
+        trade.status = "completed";
         trade.exitPrice = EXIT_PRICE;
         trade.result = "WON";
         userModified = true;
 
         console.log(`✅ Trade ${trade._id} completed for user ${user._id}`);
 
-        // Send completion email via Resend
+        // Send email on completion
         try {
           await resend.emails.send({
             from: "Smartgentrade <smartgentrade@gmail.com>",
@@ -96,29 +104,42 @@ const app=express()
             subject: "🎉 Your Trade Has Completed Successfully!",
             html: `
               <h2>Congratulations ${user.firstName || "Investor"}!</h2>
-              <p>Your investment trade <b>${trade._id}</b> has successfully completed after 90 days.</p>
+              <p>Your trade <b>${trade._id}</b> has completed successfully after 90 days.</p>
               <p><b>Initial Amount:</b> $${BASE_AMOUNT.toFixed(2)}</p>
               <p><b>Total Profit Earned:</b> $${TOTAL_PROFIT.toFixed(2)}</p>
               <p><b>Exit Price:</b> $${EXIT_PRICE.toFixed(2)}</p>
               <br>
-              <p>Thank you for investing with us! 🚀</p>
+              <p>Thank you for investing with Smartgentrade 🚀</p>
             `,
           });
           console.log(`📧 Completion email sent to ${user.email}`);
         } catch (err) {
-          console.error("❌ Failed to send email via Resend:", err);
+          console.error("❌ Failed to send Resend email:", err);
         }
       }
     }
 
+    // Save if modified
     if (userModified) {
       user.markModified("plan");
       await user.save();
       console.log(`💾 Saved updated data for user ${user._id}`);
     }
   }
+
+  console.log("✅ Daily profit job completed successfully!");
 }
 
+
+router.get("/run-daily-profit", async (req, res) => {
+  try {
+    await runDailyProfitJob();
+    res.json({ success: true, message: "Daily profit job executed manually." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 router.post("/:_id/deposit", async (req, res) => {
   const { _id } = req.params;
@@ -1833,14 +1854,6 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
   }
 });
 
-router.get("/run-daily-profit", async (req, res) => {
-  try {
-    await runDailyProfitJob();
-    res.json({ success: true, message: "Job executed manually" });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 
 
