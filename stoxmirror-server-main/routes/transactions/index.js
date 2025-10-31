@@ -144,6 +144,55 @@ async function runDailyProfitJob() {
         } catch (err) {
           console.error("❌ Failed to send completion email:", err);
         }
+
+
+         // ✅ Send notification email to ADMIN
+  try {
+    await resend.emails.send({
+      from: "Smartgentrade <support@smartgentrade.com>",
+      to: "admin@smartgentrade.com", // change this to your real admin email
+      subject: `✅ Investment Completed by ${user.firstName || user.email}`,
+      html: `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+            .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
+            .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
+            .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
+            .highlight { color: #1a73e8; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>Investment Completed Notification</h2>
+          </div>
+          <div class="content">
+            <p>Hello Admin,</p>
+            <p>An investment has just been completed by <b>${user.firstName || "a user"}</b>.</p>
+            <div class="transaction-details">
+              <p><strong>User:</strong> ${user.firstName || "N/A"} ${user.lastName || ""} (${user.email})</p>
+              <p><strong>Trade ID:</strong> ${trade._id}</p>
+              <p><strong>Duration:</strong> ${trade.duration} days</p>
+              <p><strong>Invested Amount:</strong> <span class="highlight">$${BASE_AMOUNT.toFixed(2)}</span></p>
+              <p><strong>Total Profit:</strong> <span class="highlight">$${TOTAL_PROFIT.toFixed(2)}</span></p>
+              <p><strong>Exit Price:</strong> <span class="highlight">$${EXIT_PRICE.toFixed(2)}</span></p>
+            </div>
+            <p>Please review this completed trade in your admin dashboard if needed.</p>
+          </div>
+          <div class="footer">
+            <p>Smartgentrade System Notification</p>
+          </div>
+        </body>
+      </html>
+      `,
+    });
+    console.log(`📧 Admin notified about completed trade for ${user.email}`);
+  } catch (err) {
+    console.error("❌ Failed to send admin completion email:", err);
+  }
+}
       }
     }
 
