@@ -101,20 +101,45 @@ async function runDailyProfitJob() {
 
         // Send completion email
         try {
-          await resend.emails.send({
-            from: "Smartgentrade <support@smartgentrade.com>",
-            to: user.email,
-            subject: "🎉 Your Investment Has Matured!",
-            html: `
-              <h2>Congratulations ${user.firstName || "Investor"}!</h2>
-              <p>Your investment plan <b>${trade._id}</b> has completed successfully after ${trade.duration} days.</p>
-              <p><b>Initial Amount:</b> $${BASE_AMOUNT.toFixed(2)}</p>
-              <p><b>Total Profit Earned:</b> $${TOTAL_PROFIT.toFixed(2)}</p>
-              <p><b>Total Returned to Balance:</b> $${FINAL_PAYOUT.toFixed(2)}</p>
-              <br>
-              <p>Thank you for investing with Smartgentrade 🚀</p>
-            `,
-          });
+         await resend.emails.send({
+  from: "Smartgentrade <support@smartgentrade.com>",
+  to: user.email,
+  subject: "🎉 Your Trade Has Completed Successfully!",
+  html: `
+  <html>
+  <head>
+    <style>
+      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+      .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+      .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
+      .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
+      .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
+      .highlight { color: #1a73e8; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h2>Investment Completed Successfully 🎯</h2>
+    </div>
+    <div class="content">
+      <p>Congratulations ${user.firstName || "Investor"}!</p>
+      <p>Your investment has successfully completed after <b>${trade.duration}</b> days.</p>
+      <div class="transaction-details">
+        <p><strong>Investment ID:</strong> ${trade._id}</p>
+        <p><strong>Initial Amount:</strong> <span class="highlight">$${BASE_AMOUNT.toFixed(2)}</span></p>
+        <p><strong>Total Profit Earned:</strong> <span class="highlight">$${TOTAL_PROFIT.toFixed(2)}</span></p>
+       
+      </div>
+      <p>Thank you for investing with Smartgentrade. We appreciate your trust 🚀</p>
+    </div>
+    <div class="footer">
+      <p>Best regards,<br><b>Smartgentrade Team</b></p>
+    </div>
+  </body>
+  </html>
+  `
+});
+
           console.log(`📧 Completion email sent to ${user.email}`);
         } catch (err) {
           console.error("❌ Failed to send completion email:", err);
@@ -125,21 +150,44 @@ async function runDailyProfitJob() {
     // Send daily profit summary email
     if (totalDailyProfit > 0) {
       try {
-        await resend.emails.send({
-          from: "Smartgentrade <support@smartgentrade.com>",
-          to: user.email,
-          subject: "💸 Daily Profit Added to Your Account!",
-          html: `
-            <h2>Hello ${user.firstName || "Investor"},</h2>
-            <p>Your active plans have just generated daily profit.</p>
-            <p><b>Today's Profit:</b> $${totalDailyProfit.toFixed(2)}</p>
-            <p><b>Total Accumulated Profit:</b> $${user.profit.toFixed(2)}</p>
-            <br>
-            <p>Keep your plans running to continue earning passive income daily.</p>
-            <p>– The <b>Smartgentrade</b> Team 🚀</p>
-          `,
-        });
-        console.log(`📧 Daily profit email sent to ${user.email} (+$${totalDailyProfit.toFixed(2)})`);
+       await resend.emails.send({
+  from: "Smartgentrade <support@smartgentrade.com>",
+  to: user.email,
+  subject: "💸 Daily Profit Added to Your Account!",
+  html: `
+  <html>
+  <head>
+    <style>
+      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+      .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+      .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
+      .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
+      .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
+      .highlight { color: #1a73e8; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h2>Daily Profit Notification</h2>
+    </div>
+    <div class="content">
+      <p>Hello ${user.firstName || "Investor"},</p>
+      <p>Great news! You've earned profit today from your active investment plans.</p>
+      <div class="transaction-details">
+        <p><strong>Today's Profit:</strong> <span class="highlight">$${PROFIT_PER_DAY .toFixed(2)}</span></p>
+        <p><strong>Total Profit So Far:</strong> <span class="highlight">$${trade.totalProfit.toFixed(2)}</span></p>
+      </div>
+      <p>Keep your investments running to continue earning daily returns.</p>
+    </div>
+    <div class="footer">
+      <p>Best regards,<br><b>Smartgentrade Team</b></p>
+    </div>
+  </body>
+  </html>
+  `
+});
+
+        console.log(`📧 Daily profit email sent to ${user.email} (+$${PROFIT_PER_DAY .toFixed(2)})`);
       } catch (err) {
         console.error("❌ Failed to send daily profit email:", err);
       }
