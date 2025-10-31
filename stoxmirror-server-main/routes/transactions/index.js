@@ -51,7 +51,7 @@ async function runDailyProfitJob() {
     let userModified = false;
     let totalDailyProfit = 0;
 
-    // Initialize user profit if not exists
+    // Initialize profit
     if (typeof user.profit !== "number") {
       user.profit = 0;
       userModified = true;
@@ -61,51 +61,56 @@ async function runDailyProfitJob() {
       const trade = user.plan[i];
       if (trade.status !== "active") continue;
 
-      let DAILY_PERCENTAGE =
+      // Initialize fields if missing
+      trade.daysElapsed = trade.daysElapsed || 0;
+      trade.startTime = trade.startTime || new Date();
+      trade.duration = trade.duration || 90; // fallback if duration missing
+      const DAILY_PERCENTAGE =
         Number(trade.dailyProfitRate) > 1
           ? Number(trade.dailyProfitRate) / 100
           : Number(trade.dailyProfitRate);
-
       const BASE_AMOUNT = Number(trade.amount) || 0;
-      const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
 
-      // Update profit values
+      // Skip if trade already completed
+      if (trade.daysElapsed >= trade.duration) continue;
+
+      // Calculate profit for today
+      const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
       user.profit += PROFIT_PER_DAY;
       trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
       trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
+      trade.daysElapsed += 1; // increment elapsed days
       userModified = true;
       totalDailyProfit += PROFIT_PER_DAY;
 
-      console.log(`💰 Added $${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (trade ${trade._id})`);
+      console.log(`💰 Added $${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (Trade ${trade._id}, Day ${trade.daysElapsed}/${trade.duration})`);
 
-      // Check 90-day completion
-      const start = new Date(trade.startTime);
-      const now = new Date();
-      const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
-
-      if (diffDays >= 90) {
-        const TOTAL_PROFIT = trade.totalProfit || trade.profit || 0;
-        const EXIT_PRICE = BASE_AMOUNT + TOTAL_PROFIT;
+      // Check if this is the final day
+      if (trade.daysElapsed >= trade.duration) {
+        const TOTAL_PROFIT = trade.totalProfit || 0;
+        const FINAL_PAYOUT = BASE_AMOUNT + trade.profit;
 
         trade.status = "completed";
-        trade.exitPrice = EXIT_PRICE;
+        trade.exitPrice = FINAL_PAYOUT;
         trade.result = "WON";
+        trade.endDate = new Date();
+        user.profit = (user.balance || 0) + FINAL_PAYOUT; // return investment + profit
         userModified = true;
 
-        console.log(`✅ Trade ${trade._id} completed for user ${user._id}`);
+        console.log(`✅ Trade ${trade._id} completed for user ${user._id} after ${trade.duration} days`);
 
         // Send completion email
         try {
           await resend.emails.send({
             from: "Smartgentrade <support@smartgentrade.com>",
             to: user.email,
-            subject: "🎉 Your Trade Has Completed Successfully!",
+            subject: "🎉 Your Investment Has Matured!",
             html: `
               <h2>Congratulations ${user.firstName || "Investor"}!</h2>
-              <p>Your trade <b>${trade._id}</b> has successfully completed after 90 days.</p>
+              <p>Your investment plan <b>${trade._id}</b> has completed successfully after ${trade.duration} days.</p>
               <p><b>Initial Amount:</b> $${BASE_AMOUNT.toFixed(2)}</p>
               <p><b>Total Profit Earned:</b> $${TOTAL_PROFIT.toFixed(2)}</p>
-              <p><b>Exit Price:</b> $${EXIT_PRICE.toFixed(2)}</p>
+              <p><b>Total Returned to Balance:</b> $${FINAL_PAYOUT.toFixed(2)}</p>
               <br>
               <p>Thank you for investing with Smartgentrade 🚀</p>
             `,
@@ -117,7 +122,7 @@ async function runDailyProfitJob() {
       }
     }
 
-    // Send daily profit email summary
+    // Send daily profit summary email
     if (totalDailyProfit > 0) {
       try {
         await resend.emails.send({
@@ -126,11 +131,11 @@ async function runDailyProfitJob() {
           subject: "💸 Daily Profit Added to Your Account!",
           html: `
             <h2>Hello ${user.firstName || "Investor"},</h2>
-            <p>Great news! You've earned profit today from your active investment plans.</p>
+            <p>Your active plans have just generated daily profit.</p>
             <p><b>Today's Profit:</b> $${totalDailyProfit.toFixed(2)}</p>
-            <p><b>Total Profit So Far:</b> $${user.profit.toFixed(2)}</p>
+            <p><b>Total Accumulated Profit:</b> $${user.profit.toFixed(2)}</p>
             <br>
-            <p>Keep your investments running to continue earning daily returns.</p>
+            <p>Keep your plans running to continue earning passive income daily.</p>
             <p>– The <b>Smartgentrade</b> Team 🚀</p>
           `,
         });
@@ -143,13 +148,12 @@ async function runDailyProfitJob() {
     if (userModified) {
       user.markModified("plan");
       await user.save();
-      console.log(`💾 Saved updated data for user ${user._id}`);
+      console.log(`💾 Saved updates for user ${user._id}`);
     }
   }
 
   console.log("✅ Daily profit job completed successfully!");
 }
-
 
 
 router.get("/run-daily-profit", async (req, res) => {
