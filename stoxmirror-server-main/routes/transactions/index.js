@@ -61,187 +61,159 @@ async function runDailyProfitJob() {
       const trade = user.plan[i];
       if (trade.status !== "active") continue;
 
-      // Initialize fields if missing
       trade.daysElapsed = trade.daysElapsed || 0;
       trade.startTime = trade.startTime || new Date();
-      trade.duration = trade.duration || 90; // fallback if duration missing
+      trade.duration = trade.duration || 90;
+
       const DAILY_PERCENTAGE =
         Number(trade.dailyProfitRate) > 1
           ? Number(trade.dailyProfitRate) / 100
           : Number(trade.dailyProfitRate);
+
       const BASE_AMOUNT = Number(trade.amount) || 0;
 
       // Skip if trade already completed
       if (trade.daysElapsed >= trade.duration) continue;
 
-      // Calculate profit for today
+      // Calculate profit
       const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
-      user.profit += PROFIT_PER_DAY;
       trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
       trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
-      trade.daysElapsed += 1; // increment elapsed days
-      userModified = true;
+      trade.daysElapsed += 1;
+      user.profit += PROFIT_PER_DAY;
       totalDailyProfit += PROFIT_PER_DAY;
+      userModified = true;
 
-      console.log(`💰 Added $${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (Trade ${trade._id}, Day ${trade.daysElapsed}/${trade.duration})`);
+      console.log(
+        `💰 Added $${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (Trade ${trade._id}, Day ${trade.daysElapsed}/${trade.duration})`
+      );
 
-      // Check if this is the final day
+      // Check if trade completed
       if (trade.daysElapsed >= trade.duration) {
         const TOTAL_PROFIT = trade.totalProfit || 0;
-        const FINAL_PAYOUT = BASE_AMOUNT + trade.profit;
+        const FINAL_PAYOUT = BASE_AMOUNT + TOTAL_PROFIT;
 
         trade.status = "completed";
         trade.exitPrice = FINAL_PAYOUT;
         trade.result = "WON";
         trade.endDate = new Date();
-        user.profit = (user.balance || 0) + FINAL_PAYOUT; // return investment + profit
+        user.profit = (user.balance || 0) + FINAL_PAYOUT;
         userModified = true;
 
-        console.log(`✅ Trade ${trade._id} completed for user ${user._id} after ${trade.duration} days`);
+        console.log(
+          `✅ Trade ${trade._id} completed for user ${user._id} after ${trade.duration} days`
+        );
 
-        // Send completion email
+        // 📩 Send completion email to user
         try {
-         await resend.emails.send({
-  from: "Smartgentrade <support@smartgentrade.com>",
-  to: user.email,
-  subject: "🎉 Your Trade Has Completed Successfully!",
-  html: `
-  <html>
-  <head>
-    <style>
-      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-      .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-      .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-      .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
-      .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
-      .highlight { color: #1a73e8; font-weight: bold; }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <h2>Investment Completed Successfully 🎯</h2>
-    </div>
-    <div class="content">
-      <p>Congratulations ${user.firstName || "Investor"}!</p>
-      <p>Your investment has successfully completed after <b>${trade.duration}</b> days.</p>
-      <div class="transaction-details">
-        <p><strong>Investment ID:</strong> ${trade._id}</p>
-        <p><strong>Initial Amount:</strong> <span class="highlight">$${BASE_AMOUNT.toFixed(2)}</span></p>
-        <p><strong>Total Profit Earned:</strong> <span class="highlight">$${TOTAL_PROFIT.toFixed(2)}</span></p>
-       
-      </div>
-      <p>Thank you for investing with Smartgentrade. We appreciate your trust 🚀</p>
-    </div>
-    <div class="footer">
-      <p>Best regards,<br><b>Smartgentrade Team</b></p>
-    </div>
-  </body>
-  </html>
-  `
-});
-
+          await resend.emails.send({
+            from: "Smartgentrade <support@smartgentrade.com>",
+            to: user.email,
+            subject: "🎉 Your Trade Has Completed Successfully!",
+            html: `
+              <html>
+              <head>
+                <style>
+                  body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+                  .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+                  .content { background-color: #fff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
+                  .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
+                  .highlight { color: #1a73e8; font-weight: bold; }
+                </style>
+              </head>
+              <body>
+                <div class="header"><h2>Investment Completed Successfully 🎯</h2></div>
+                <div class="content">
+                  <p>Congratulations ${user.firstName || "Investor"}!</p>
+                  <p>Your investment has successfully completed after <b>${trade.duration}</b> day(s).</p>
+                  <div class="transaction-details">
+                    <p><strong>Investment ID:</strong> ${trade._id}</p>
+                    <p><strong>Initial Amount:</strong> <span class="highlight">$${BASE_AMOUNT.toFixed(2)}</span></p>
+                    <p><strong>Total Profit Earned:</strong> <span class="highlight">$${TOTAL_PROFIT.toFixed(2)}</span></p>
+                  </div>
+                  <p>Your final payout of <b>$${FINAL_PAYOUT.toFixed(2)}</b> has been added to your account profit balance.</p>
+                </div>
+                <div style="text-align:center;color:#666;font-size:14px;margin-top:20px;">
+                  <p>Best regards,<br><b>Smartgentrade Team</b></p>
+                </div>
+              </body>
+              </html>
+            `,
+          });
           console.log(`📧 Completion email sent to ${user.email}`);
         } catch (err) {
           console.error("❌ Failed to send completion email:", err);
         }
 
-
-         // ✅ Send notification email to ADMIN
-  try {
-    await resend.emails.send({
-      from: "Smartgentrade <support@smartgentrade.com>",
-      to: "admin@smartgentrade.com", // change this to your real admin email
-      subject: `✅ Investment Completed by ${user.firstName || user.email}`,
-      html: `
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-            .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
-            .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
-            .highlight { color: #1a73e8; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h2>Investment Completed Notification</h2>
-          </div>
-          <div class="content">
-            <p>Hello Admin,</p>
-            <p>An investment has just been completed by <b>${user.firstName || "a user"}</b>.</p>
-            <div class="transaction-details">
-              <p><strong>User:</strong> ${user.firstName || "N/A"} ${user.lastName || ""} (${user.email})</p>
-              <p><strong>Trade ID:</strong> ${trade._id}</p>
-              <p><strong>Duration:</strong> ${trade.duration} days</p>
-              <p><strong>Invested Amount:</strong> <span class="highlight">$${BASE_AMOUNT.toFixed(2)}</span></p>
-              <p><strong>Total Profit:</strong> <span class="highlight">$${TOTAL_PROFIT.toFixed(2)}</span></p>
-              <p><strong>Exit Price:</strong> <span class="highlight">$${EXIT_PRICE.toFixed(2)}</span></p>
-            </div>
-            <p>Please review this completed trade in your admin dashboard if needed.</p>
-          </div>
-          <div class="footer">
-            <p>Smartgentrade System Notification</p>
-          </div>
-        </body>
-      </html>
-      `,
-    });
-    console.log(`📧 Admin notified about completed trade for ${user.email}`);
-  } catch (err) {
-    console.error("❌ Failed to send admin completion email:", err);
-  }
-}
+        // 📩 Notify Admin
+        try {
+          await resend.emails.send({
+            from: "Smartgentrade <support@smartgentrade.com>",
+            to: "smartgentrade@gmail.com",
+            subject: `✅ Investment Completed by ${user.firstName || user.email}`,
+            html: `
+              <html>
+              <body style="font-family: Arial, sans-serif;">
+                <h2 style="background:#1a73e8;color:white;padding:15px;">Investment Completed Notification</h2>
+                <p>An investment by <b>${user.firstName || "a user"}</b> has completed.</p>
+                <div style="background:#f8f9fa;padding:10px;border-radius:5px;">
+                  <p><b>User:</b> ${user.firstName || "N/A"} ${user.lastName || ""} (${user.email})</p>
+                  <p><b>Trade ID:</b> ${trade._id}</p>
+                  <p><b>Duration:</b> ${trade.duration} days</p>
+                  <p><b>Invested:</b> $${BASE_AMOUNT.toFixed(2)}</p>
+                  <p><b>Profit:</b> $${TOTAL_PROFIT.toFixed(2)}</p>
+                  <p><b>Exit Price:</b> $${FINAL_PAYOUT.toFixed(2)}</p>
+                </div>
+                <p style="font-size:13px;color:#777;">Smartgentrade System Notification</p>
+              </body>
+              </html>
+            `,
+          });
+          console.log(`📧 Admin notified for ${user.email}`);
+        } catch (err) {
+          console.error("❌ Failed to send admin email:", err);
+        }
       }
     }
 
-    // Send daily profit summary email
+    // 📩 Daily profit summary (send once per user)
     if (totalDailyProfit > 0) {
       try {
-       await resend.emails.send({
-  from: "Smartgentrade <support@smartgentrade.com>",
-  to: user.email,
-  subject: "💸 Daily Profit Added to Your Account!",
-  html: `
-  <html>
-  <head>
-    <style>
-      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-      .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-      .content { background-color: #ffffff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-      .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
-      .footer { margin-top: 20px; text-align: center; color: #666; font-size: 14px; }
-      .highlight { color: #1a73e8; font-weight: bold; }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <h2>Daily Profit Notification</h2>
-    </div>
-    <div class="content">
-      <p>Hello ${user.firstName || "Investor"},</p>
-      <p>Great news! You've earned profit today from your active investment plans.</p>
-      <div class="transaction-details">
-        <p><strong>Today's Profit:</strong> <span class="highlight">$${PROFIT_PER_DAY .toFixed(2)}</span></p>
-        <p><strong>Total Profit So Far:</strong> <span class="highlight">$${trade.totalProfit.toFixed(2)}</span></p>
-      </div>
-      <p>Keep your investments running to continue earning daily returns.</p>
-    </div>
-    <div class="footer">
-      <p>Best regards,<br><b>Smartgentrade Team</b></p>
-    </div>
-  </body>
-  </html>
-  `
-});
-
-        console.log(`📧 Daily profit email sent to ${user.email} (+$${PROFIT_PER_DAY .toFixed(2)})`);
+        await resend.emails.send({
+          from: "Smartgentrade <support@smartgentrade.com>",
+          to: user.email,
+          subject: "💸 Daily Profit Added to Your Account!",
+          html: `
+            <html>
+            <head>
+              <style>
+                body { font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+                .content { background-color: #fff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
+                .highlight { color: #1a73e8; font-weight: bold; }
+              </style>
+            </head>
+            <body>
+              <div class="header"><h2>Daily Profit Notification</h2></div>
+              <div class="content">
+                <p>Hello ${user.firstName || "Investor"},</p>
+                <p>You've earned <b>$${totalDailyProfit.toFixed(2)}</b> in profit today from your active investments.</p>
+                <p>Keep your investments running to continue earning daily returns!</p>
+              </div>
+              <div style="text-align:center;color:#666;font-size:14px;margin-top:20px;">
+                <p>Best regards,<br><b>Smartgentrade Team</b></p>
+              </div>
+            </body>
+            </html>
+          `,
+        });
+        console.log(`📧 Daily summary sent to ${user.email}`);
       } catch (err) {
-        console.error("❌ Failed to send daily profit email:", err);
+        console.error("❌ Failed to send daily summary email:", err);
       }
     }
 
+    // Save user if modified
     if (userModified) {
       user.markModified("plan");
       await user.save();
@@ -252,6 +224,25 @@ async function runDailyProfitJob() {
   console.log("✅ Daily profit job completed successfully!");
 }
 
+router.post("/send-email", async (req, res) => {
+  
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${"re_cLvMH6wd_PepfmEZfFNEMEpTVAdtjviwJ"}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    console.error("Email send error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get("/run-daily-profit", async (req, res) => {
   try {
