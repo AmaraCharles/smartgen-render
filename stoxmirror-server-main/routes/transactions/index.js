@@ -39,24 +39,6 @@ const cron = require('node-cron');
 const { v4: uuidv4 } = require("uuid");
 const app=express()
 
-router.post("/send-email", async (req, res) => {
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(req.body)
-    });
-
-    const data = await response.json();
-    res.status(response.status).json(data);
-  } catch (err) {
-    console.error("Email send error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 async function runDailyProfitJob() {
   console.log("⏰ Running daily profit job...");

@@ -322,15 +322,66 @@ const sendWithdrawalApproval = async ({ from, amount, method, timestamp, to }) =
     await resend.emails.send({
       from: process.env.EMAIL_USER,
       to: to,
-      subject: "Withdrawal Notification",
+      subject: "Withdrawal Approved",
       html: `
+        <!DOCTYPE html>
         <html>
-        <p>Hello ${from},</p>
-        <p>Your withdrawal request of $${amount} via ${method} has been approved.</p>
-        <p>Kindly check your account for the updated balance.</p>
-        <p>${timestamp}</p>
-        <p>Best wishes,</p>
-        <p>smartgentrade Team</p>
+        <head>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              line-height: 1.6; 
+              color: #333; 
+              max-width: 600px; 
+              margin: 0 auto; 
+              padding: 20px; 
+              background-color: #f5f7fa;
+            }
+            .header { 
+              background-color: #1a73e8; 
+              color: white; 
+              padding: 20px; 
+              text-align: center; 
+              border-radius: 5px 5px 0 0; 
+            }
+            .content { 
+              background-color: #ffffff; 
+              padding: 20px; 
+              border: 1px solid #e0e0e0; 
+              border-radius: 0 0 5px 5px; 
+            }
+            .details { 
+              background-color: #f8f9fa; 
+              padding: 15px; 
+              margin: 15px 0; 
+              border-radius: 5px; 
+            }
+            .footer { 
+              margin-top: 20px; 
+              text-align: center; 
+              color: #666; 
+              font-size: 14px; 
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>Withdrawal Approved</h2>
+          </div>
+          <div class="content">
+            <p>Hello ${from},</p>
+            <p>We are pleased to inform you that your withdrawal request has been <strong>approved</strong>. Please find the details below:</p>
+            <div class="details">
+              <p><strong>Amount:</strong> $${amount}</p>
+              <p><strong>Payment Method:</strong> ${method}</p>
+              <p><strong>Date:</strong> ${timestamp}</p>
+            </div>
+            <p>The funds should now reflect in your account. Kindly verify your updated balance.</p>
+          </div>
+          <div class="footer">
+            <p>Best regards,<br>Smartgentrade Team</p>
+          </div>
+        </body>
         </html>
       `
     });
@@ -340,6 +391,7 @@ const sendWithdrawalApproval = async ({ from, amount, method, timestamp, to }) =
     throw error;
   }
 };
+
 
 const sendPlanEmail = async ({ from, subamount, subname, timestamp }) => {
   try {
