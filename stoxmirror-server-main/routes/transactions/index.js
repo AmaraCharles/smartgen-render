@@ -2,7 +2,7 @@
 var express = require("express");
 // const { v4: uuidv4 } = require("uuid");
 const UsersDatabase = require("../../models/User");
-
+const mongoose = require('mongoose');
 var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
 const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval,sendWithdrawalApproval,sendKYCApprovalEmail,sendKYCRejectionEmail} = require("../../utils");
