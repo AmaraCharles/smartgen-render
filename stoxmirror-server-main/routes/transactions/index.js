@@ -1648,6 +1648,14 @@ router.put("/:_id/transactions/:transactionId/decline", async (req, res) => {
     });
   }
 });
+const Image = mongoose.model('Image', {
+  imageUrl: String,
+  owner: String,
+  docNum: String,
+  ownerdet:String,
+status:String,
+});
+
 
 router.put("/:_id/kyc/approve", async (req, res) => {
   try {
