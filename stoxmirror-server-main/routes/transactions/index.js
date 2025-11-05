@@ -1672,12 +1672,25 @@ router.put("/:_id/kyc/approve", async (req, res) => {
       return res.status(400).json({ success: false, message: "KYC already verified" });
     }
 
-    // ✅ Update KYC status
+    // ✅ Update KYC status for user
     user.kyc = "Verified";
     user.kycApprovedAt = new Date();
     await user.save();
 
     console.log("✅ User KYC updated:", { email: user.email, status: user.kyc });
+
+    // ✅ Update KYC image status to 'approved'
+    const updatedImage = await Image.findOneAndUpdate(
+      { owner: _id }, // assuming 'owner' in Image collection is the user’s ID
+      { $set: { status: "approved" } },
+      { new: true }
+    );
+
+    if (updatedImage) {
+      console.log("🖼️ KYC image status updated to 'approved' for owner:", _id);
+    } else {
+      console.warn("⚠️ No image found for this owner:", _id);
+    }
 
     // ✅ Send approval email
     try {
@@ -1692,13 +1705,14 @@ router.put("/:_id/kyc/approve", async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "KYC verified successfully and email notification sent",
+      message: "KYC verified successfully, image status approved, and email sent",
       user: {
         _id: user._id,
         email: user.email,
         kyc: user.kyc,
         kycApprovedAt: user.kycApprovedAt,
       },
+      image: updatedImage || null,
     });
 
   } catch (error) {
@@ -1710,6 +1724,7 @@ router.put("/:_id/kyc/approve", async (req, res) => {
     });
   }
 });
+
 
 router.get("/:_id/deposit/history", async (req, res) => {
   const { _id } = req.params;
