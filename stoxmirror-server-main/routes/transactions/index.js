@@ -1683,7 +1683,7 @@ router.put("/:_id/kyc/approve", async (req, res) => {
 
     // ✅ Update KYC image status to 'approved'
     const updatedImage = await Image.findOneAndUpdate(
-      { owner: _id }, // assuming 'owner' in Image collection is the user’s ID
+      { ownerdet: _id }, // assuming 'owner' in Image collection is the user’s ID
       { $set: { status: "approved" } },
       { new: true }
     );
