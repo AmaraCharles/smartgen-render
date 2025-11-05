@@ -1924,10 +1924,19 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
       });
     }
 
-    // 🔹 Find withdrawal transaction
-    const withdrawalTx = user.withdrawals.find(
-      (tx) => tx._id.toString() === transactionId
-    );
+    // 🔹 Try to get subdocument via Mongoose helper first
+    let withdrawalTx = null;
+    // If withdrawals is a Mongoose DocumentArray, .id(transactionId) works
+    if (typeof user.withdrawals.id === "function") {
+      withdrawalTx = user.withdrawals.id(transactionId);
+    }
+
+    // Fallback: find by comparing stringified _id (covers ObjectId vs string)
+    if (!withdrawalTx) {
+      withdrawalTx = user.withdrawals.find(
+        (tx) => (tx._id ? tx._id.toString() : tx.id) === transactionId
+      );
+    }
 
     if (!withdrawalTx) {
       return res.status(404).json({
@@ -1945,31 +1954,43 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
       });
     }
 
-    // 🔹 Update transaction status
+    // 🔹 Update transaction status & record approver time
     withdrawalTx.status = "Approved";
+    withdrawalTx.approvedAt = new Date();
+
+    // If for any reason Mongoose didn't detect the change, mark the path
+    // This ensures changes to nested arrays are noticed on save.
+    user.markModified && user.markModified("withdrawals");
 
     // 🔹 Subtract amount from user profit safely
     const amount = Number(withdrawalTx.amount) || 0;
     user.profit = Math.max((user.profit || 0) - amount, 0); // prevent negative profit
 
-    // 🔹 Save changes
+    // 🔹 Save changes (important: await this)
     await user.save();
 
-    // ✅ Respond success (before sending email)
+    // Prepare response payload (fresh subdoc)
+    const savedTx = (typeof user.withdrawals.id === "function")
+      ? user.withdrawals.id(transactionId)
+      : user.withdrawals.find((tx) => (tx._id ? tx._id.toString() : tx.id) === transactionId);
+
+    // ✅ Respond success (we saved before responding)
     res.status(200).json({
       success: true,
       message: "Withdrawal approved and profit updated",
-      transaction: withdrawalTx,
+      transaction: savedTx,
       updatedProfit: user.profit,
     });
 
-    // 🔹 Send withdrawal approval email (async, after response)
-    await sendWithdrawalApproval({
-      from: `${user.firstName} ${user.lastName}`,
+    // 🔹 Send withdrawal approval email (fire-and-forget)
+    sendWithdrawalApproval({
+      from: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
       amount: withdrawalTx.amount,
       method: withdrawalTx.method,
       timestamp: new Date().toLocaleString(),
       to: user.email,
+    }).catch((emailErr) => {
+      console.error("❌ Failed to send withdrawal approval email:", emailErr);
     });
 
   } catch (error) {
@@ -1981,7 +2002,6 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
     });
   }
 });
-
 
 
 
