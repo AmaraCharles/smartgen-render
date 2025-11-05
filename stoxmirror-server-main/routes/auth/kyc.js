@@ -2,14 +2,16 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const { sendKycAlert } = require("../../utils");
+const Image = require("../../models/Image");
+
 // Create a MongoDB model for storing image URLs
-const Image = mongoose.model('Image', {
-  imageUrl: String,
-  owner: String,
-  docNum: String,
-  ownerdet:String,
-status:String,
-});
+// const Image = mongoose.model('Image', {
+//   imageUrl: String,
+//   owner: String,
+//   docNum: String,
+//   ownerdet:String,
+// status:String,
+// });
 
 // Middleware to parse JSON in requests
 router.use(express.json());

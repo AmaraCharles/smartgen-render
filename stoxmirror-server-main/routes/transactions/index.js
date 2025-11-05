@@ -2,7 +2,9 @@
 var express = require("express");
 // const { v4: uuidv4 } = require("uuid");
 const UsersDatabase = require("../../models/User");
-const mongoose = require('mongoose');
+
+const Image = require("../../models/Image");
+
 var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
 const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval,sendWithdrawalApproval,sendKYCApprovalEmail,sendKYCRejectionEmail} = require("../../utils");
@@ -1648,90 +1650,63 @@ router.put("/:_id/transactions/:transactionId/decline", async (req, res) => {
     });
   }
 });
-const Image = mongoose.model('Image', {
-  imageUrl: String,
-  owner: String,
-  docNum: String,
-  ownerdet:String,
-status:String,
-});
-
 
 router.put("/:_id/kyc/approve", async (req, res) => {
   try {
     const { _id } = req.params;
     console.log("🔹 Approving KYC for user ID:", _id);
 
-    // ✅ Validate ID
-    if (!_id || _id === "undefined" || _id === "null") {
-      return res.status(400).json({ success: false, message: "Invalid user ID" });
-    }
-
     // ✅ Find user
     const user = await UsersDatabase.findById(_id);
     if (!user) {
-      console.warn("⚠️ User not found for ID:", _id);
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
     // ✅ Check if already verified
     if (user.kyc === "Verified") {
-      console.log("ℹ️ User already verified:", user.email);
       return res.status(400).json({ success: false, message: "KYC already verified" });
     }
 
-    // ✅ Update KYC status for user
+    // ✅ Update user KYC status
     user.kyc = "Verified";
     user.kycApprovedAt = new Date();
     await user.save();
 
-    console.log("✅ User KYC updated:", { email: user.email, status: user.kyc });
-
-    // ✅ Update KYC image status to 'approved'
-    const updatedImage = await Image.findOneAndUpdate(
-      { owner: _id }, // assuming 'owner' in Image collection is the user’s ID
-      { $set: { status: "approved" } },
-      { new: true }
+    // ✅ Update image document status
+    await Image.updateMany(
+      { owner: user.email },
+      { $set: { status: "Approved" } }
     );
 
-    if (updatedImage) {
-      console.log("🖼️ KYC image status updated to 'approved' for owner:", _id);
-    } else {
-      console.warn("⚠️ No image found for this owner:", _id);
-    }
+    console.log("✅ User and image KYC updated:", user.email);
 
     // ✅ Send approval email
-    try {
-      await sendKYCApprovalEmail({
-        email: user.email,
-        firstName: user.firstName || "User",
-      });
-      console.log("📧 KYC approval email sent to:", user.email);
-    } catch (emailError) {
-      console.error("❌ Failed to send KYC approval email:", emailError);
-    }
+    await sendKYCApprovalEmail({
+      email: user.email,
+      firstName: user.firstName || "User",
+    });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: "KYC verified successfully, image status approved, and email sent",
+      message: "KYC verified successfully, image approved, and email sent",
       user: {
         _id: user._id,
         email: user.email,
         kyc: user.kyc,
         kycApprovedAt: user.kycApprovedAt,
       },
-      image: updatedImage || null,
     });
 
   } catch (error) {
     console.error("🔥 Error approving KYC:", error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: "An error occurred while verifying KYC",
       error: error.message,
     });
   }
 });
+
 
 
 router.get("/:_id/deposit/history", async (req, res) => {
