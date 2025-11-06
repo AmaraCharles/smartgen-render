@@ -99,7 +99,8 @@ async function runDailyProfitJob() {
         trade.exitPrice = FINAL_PAYOUT;
         trade.result = "WON";
         trade.endDate = new Date();
-        user.profit = (user.balance || 0) + FINAL_PAYOUT;
+        user.profit = (trade.profit || 0) + FINAL_PAYOUT;
+        user.balance +=BASE_AMOUNT
         userModified = true;
 
         console.log(
