@@ -216,13 +216,16 @@ async function runDailyProfitJob() {
       }
     }
 
-    // Save user if modified
-    if (userModified) {
-      user.markModified("plan");
-      await user.save();
-      console.log(`💾 Saved updates for user ${user._id}`);
-    }
+   if (userModified) {
+  try {
+    user.markModified("plan");
+    await UsersDatabase.updateOne({ _id: user._id }, { $set: { plan: user.plan, balance: user.balance, profit: user.profit } });
+    console.log(`💾 User ${user._id} updated successfully.`);
+  } catch (err) {
+    console.error(`❌ Failed to update user ${user._id}:`, err);
   }
+}
+
 
   console.log("✅ Daily profit job completed successfully!");
 }
