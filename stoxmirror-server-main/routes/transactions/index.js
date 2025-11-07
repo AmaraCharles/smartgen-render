@@ -82,7 +82,7 @@ async function runDailyProfitJob() {
       trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
       trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
       trade.daysElapsed += 1;
-      user.profit += PROFIT_PER_DAY;
+      // user.profit += PROFIT_PER_DAY;
       totalDailyProfit += PROFIT_PER_DAY;
       userModified = true;
 
@@ -99,8 +99,8 @@ async function runDailyProfitJob() {
         trade.exitPrice = FINAL_PAYOUT;
         trade.result = "WON";
         trade.endDate = new Date();
-        user.profit = (trade.profit || 0) + FINAL_PAYOUT;
-        user.balance +=BASE_AMOUNT
+        // user.profit = (trade.profit || 0) + ;
+        user.balance +=FINAL_PAYOUT
         userModified = true;
 
         console.log(
