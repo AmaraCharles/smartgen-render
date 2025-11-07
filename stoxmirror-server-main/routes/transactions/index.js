@@ -226,6 +226,7 @@ async function runDailyProfitJob() {
   }
 }
 
+  }
 
   console.log("✅ Daily profit job completed successfully!");
 }
