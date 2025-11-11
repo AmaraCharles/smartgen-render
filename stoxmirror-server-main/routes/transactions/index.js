@@ -1815,61 +1815,99 @@ router.post("/kyc/alert", async (req, res) => {
 
 router.post("/:_id/withdrawal", async (req, res) => {
   const { _id } = req.params;
-  const { method, address, amount, from ,account,to,timestamp} = req.body;
-
-  const user = await UsersDatabase.findOne({ _id });
-
-  if (!user) {
-    res.status(404).json({
-      success: false,
-      status: 404,
-      message: "User not found",
-    });
-
-    return;
-  }
+  const { method, address, amount, from, account, to, timestamp, source } = req.body; // added "source"
 
   try {
-    await user.updateOne({
-      withdrawals: [
-        ...user.withdrawals,
-        {
-          _id: uuidv4(),
-          method,
-          address,
-          amount,
-          from,
-          account,
-          status: "pending",
-          timestamp
-        },
-      ],
+    const user = await UsersDatabase.findOne({ _id });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: "User not found",
+      });
+    }
+
+    // Determine which wallet to deduct from
+    if (source === "Balance") {
+      if (user.balance < amount) {
+        return res.status(400).json({
+          success: false,
+          status: 400,
+          message: "Insufficient balance for withdrawal.",
+        });
+      }
+      user.balance -= amount;
+    } 
+    else if (source === "Profit") {
+      if (user.profit < amount) {
+        return res.status(400).json({
+          success: false,
+          status: 400,
+          message: "Insufficient profit for withdrawal.",
+        });
+      }
+      user.profit -= amount;
+    } 
+    else {
+      return res.status(400).json({
+        success: false,
+        status: 400,
+        message: "Invalid withdrawal source.",
+      });
+    }
+
+    // Add the withdrawal record
+    user.withdrawals.push({
+      _id: uuidv4(),
+      method,
+      address,
+      amount,
+      from,
+      account,
+      source,
+      status: "pending",
+      timestamp,
+    });
+
+    await user.save();
+
+    // ✅ Send emails (user + admin notifications)
+    sendWithdrawalEmail({
+      amount,
+      method,
+      to,
+      address,
+      from,
+      source,
+    });
+
+    sendWithdrawalRequestEmail({
+      amount,
+      method,
+      address,
+      from,
+      source,
     });
 
     res.status(200).json({
       success: true,
       status: 200,
-      message: "Withdrawal request was successful",
-    });
-
-    sendWithdrawalEmail({
-      amount: amount,
-      method: method,
-     to:to,
-      address:address,
-      from: from,
-    });
-
-    sendWithdrawalRequestEmail({
-      amount: amount,
-      method: method,
-      address:address,
-      from: from,
+      message: "Withdrawal request submitted successfully",
+      updatedUser: {
+        balance: user.balance,
+        profit: user.profit,
+      },
     });
   } catch (error) {
-    console.log(error);
+    console.error("Withdrawal Error:", error);
+    res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Internal server error while processing withdrawal",
+    });
   }
 });
+
 
 // router.put('/approve/:_id', async (req,res)=>{
 //   const { _id} = req.params;
