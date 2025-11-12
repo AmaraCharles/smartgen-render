@@ -1828,7 +1828,7 @@ router.post("/:_id/withdrawal", async (req, res) => {
     }
 
     // Determine which wallet to deduct from
-    if (source === "Balance") {
+    if (source == "Balance") {
       if (user.balance < amount) {
         return res.status(400).json({
           success: false,
@@ -1838,7 +1838,7 @@ router.post("/:_id/withdrawal", async (req, res) => {
       }
       user.balance -= amount;
     } 
-    else if (source === "Profit") {
+    else if (source == "Profit") {
       if (user.profit < amount) {
         return res.status(400).json({
           success: false,
