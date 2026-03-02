@@ -3,8 +3,6 @@ var express = require("express");
 // const { v4: uuidv4 } = require("uuid");
 const UsersDatabase = require("../../models/User");
 
-const Image = require("../../models/Image");
-
 var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
 const { sendUserDepositEmail,sendUserPlanEmail,sendBankDepositRequestEmail,sendWithdrawalEmail,sendWithdrawalRequestEmail,sendKycAlert,sendDepositApproval,sendWithdrawalApproval,sendKYCApprovalEmail,sendKYCRejectionEmail} = require("../../utils");
@@ -42,224 +40,83 @@ const { v4: uuidv4 } = require("uuid");
 const app=express()
 
 
-async function runDailyProfitJob() {
+ async function runDailyProfitJob() {
   console.log("⏰ Running daily profit job...");
 
-  const runningUsers = await UsersDatabase.find({
-    plan: { $elemMatch: { status: "active" } },
-  });
+  const runningUsers = await UsersDatabase.find({ "plan.status": "RUNNING" });
+  const now = new Date();
 
   for (const user of runningUsers) {
     let userModified = false;
-    let totalDailyProfit = 0;
 
-    // Initialize profit
-    if (typeof user.profit !== "number") {
+    if (typeof user.profit === "undefined") {
       user.profit = 0;
       userModified = true;
     }
 
     for (let i = 0; i < user.plan.length; i++) {
       const trade = user.plan[i];
-      if (trade.status !== "active") continue;
+      if (trade.status !== "RUNNING") continue;
 
-      trade.daysElapsed = trade.daysElapsed || 0;
-      trade.startTime = trade.startTime || new Date();
-      trade.duration = trade.duration || 90;
+      const start = new Date(trade.startTime);
+      const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
 
-      const DAILY_PERCENTAGE =
-        Number(trade.dailyProfitRate) > 1
-          ? Number(trade.dailyProfitRate) / 100
-          : Number(trade.dailyProfitRate);
+      // ✅ CLOSE TRADE AFTER 90 DAYS
+      if (diffDays >= 90) {
+        const TOTAL_PROFIT = trade.totalProfit || 0;
+        const EXIT_PRICE = Number(trade.amount) + TOTAL_PROFIT;
+
+        trade.status = "COMPLETED";
+        trade.exitPrice = EXIT_PRICE;
+        trade.result = "WON";
+
+        userModified = true;
+        console.log(`✅ Trade ${trade._id} completed for user ${user._id}`);
+        continue;
+      }
+
+      // ✅ CHECK 24 HOURS SINCE LAST PROFIT
+      const lastProfitAt = trade.lastProfitAt
+        ? new Date(trade.lastProfitAt)
+        : start;
+
+      const hoursSinceLastProfit =
+        (now - lastProfitAt) / (1000 * 60 * 60);
+
+      if (hoursSinceLastProfit < 24) {
+        continue; // ⛔ Skip if 24h not reached
+      }
+
+      // ✅ NORMALIZE RATE
+      let DAILY_PERCENTAGE = Number(trade.dailyProfitRate);
+      DAILY_PERCENTAGE =
+        DAILY_PERCENTAGE > 1
+          ? DAILY_PERCENTAGE / 100
+          : DAILY_PERCENTAGE;
 
       const BASE_AMOUNT = Number(trade.amount) || 0;
-
-      // Skip if trade already completed
-      if (trade.daysElapsed >= trade.duration) continue;
-
-      // Calculate profit
       const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
+
+      // ✅ ADD PROFIT (NOT TO BALANCE)
+      user.profit += PROFIT_PER_DAY;
       trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
       trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
-      trade.daysElapsed += 1;
-      // user.profit += PROFIT_PER_DAY;
-      totalDailyProfit += PROFIT_PER_DAY;
+
+      trade.lastProfitAt = now; // 🔥 prevents duplicate credit
       userModified = true;
 
       console.log(
-        `💰 Added $${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id} (Trade ${trade._id}, Day ${trade.daysElapsed}/${trade.duration})`
+        `💰 Added ${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id}`
       );
-
-      // Check if trade completed
-      if (trade.daysElapsed >= trade.duration) {
-        const TOTAL_PROFIT = trade.totalProfit || 0;
-        const FINAL_PAYOUT = BASE_AMOUNT + TOTAL_PROFIT;
-
-        trade.status = "completed";
-        trade.exitPrice = FINAL_PAYOUT;
-        trade.result = "WON";
-        trade.endDate = new Date();
-        // user.profit = (trade.profit || 0) + ;
-        user.balance +=FINAL_PAYOUT
-        userModified = true;
-
-        console.log(
-          `✅ Trade ${trade._id} completed for user ${user._id} after ${trade.duration} days`
-        );
-
-        // 📩 Send completion email to user
-        try {
-          await resend.emails.send({
-            from: "Smartgentrade <support@smartgentrade.com>",
-            to: user.email,
-            subject: "🎉 Your Trade Has Completed Successfully!",
-            html: `
-              <html>
-              <head>
-                <style>
-                  body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-                  .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-                  .content { background-color: #fff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-                  .transaction-details { background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; }
-                  .highlight { color: #1a73e8; font-weight: bold; }
-                </style>
-              </head>
-              <body>
-                <div class="header"><h2>Investment Completed Successfully 🎯</h2></div>
-                <div class="content">
-                  <p>Congratulations ${user.firstName || "Investor"}!</p>
-                  <p>Your investment has successfully completed after <b>${trade.duration}</b> day(s).</p>
-                  <div class="transaction-details">
-                    <p><strong>Investment ID:</strong> ${trade._id}</p>
-                    <p><strong>Initial Amount:</strong> <span class="highlight">$${BASE_AMOUNT.toFixed(2)}</span></p>
-                    <p><strong>Total Profit Earned:</strong> <span class="highlight">$${TOTAL_PROFIT.toFixed(2)}</span></p>
-                  </div>
-                  <p>Your final payout of <b>$${FINAL_PAYOUT.toFixed(2)}</b> has been added to your account profit balance.</p>
-                </div>
-                <div style="text-align:center;color:#666;font-size:14px;margin-top:20px;">
-                  <p>Best regards,<br><b>Smartgentrade Team</b></p>
-                </div>
-              </body>
-              </html>
-            `,
-          });
-          console.log(`📧 Completion email sent to ${user.email}`);
-        } catch (err) {
-          console.error("❌ Failed to send completion email:", err);
-        }
-
-        // 📩 Notify Admin
-        try {
-          await resend.emails.send({
-            from: "Smartgentrade <support@smartgentrade.com>",
-            to: "smartgentrade@gmail.com",
-            subject: `✅ Investment Completed by ${user.firstName || user.email}`,
-            html: `
-              <html>
-              <body style="font-family: Arial, sans-serif;">
-                <h2 style="background:#1a73e8;color:white;padding:15px;">Investment Completed Notification</h2>
-                <p>An investment by <b>${user.firstName || "a user"}</b> has completed.</p>
-                <div style="background:#f8f9fa;padding:10px;border-radius:5px;">
-                  <p><b>User:</b> ${user.firstName || "N/A"} ${user.lastName || ""} (${user.email})</p>
-                  <p><b>Trade ID:</b> ${trade._id}</p>
-                  <p><b>Duration:</b> ${trade.duration} days</p>
-                  <p><b>Invested:</b> $${BASE_AMOUNT.toFixed(2)}</p>
-                  <p><b>Profit:</b> $${TOTAL_PROFIT.toFixed(2)}</p>
-                  <p><b>Exit Price:</b> $${FINAL_PAYOUT.toFixed(2)}</p>
-                </div>
-                <p style="font-size:13px;color:#777;">Smartgentrade System Notification</p>
-              </body>
-              </html>
-            `,
-          });
-          console.log(`📧 Admin notified for ${user.email}`);
-        } catch (err) {
-          console.error("❌ Failed to send admin email:", err);
-        }
-      }
     }
 
-    // 📩 Daily profit summary (send once per user)
-    if (totalDailyProfit > 0) {
-      try {
-        await resend.emails.send({
-          from: "Smartgentrade <support@smartgentrade.com>",
-          to: user.email,
-          subject: "💸 Daily Profit Added to Your Account!",
-          html: `
-            <html>
-            <head>
-              <style>
-                body { font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #1a73e8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-                .content { background-color: #fff; padding: 20px; border: 1px solid #e0e0e0; border-radius: 0 0 5px 5px; }
-                .highlight { color: #1a73e8; font-weight: bold; }
-              </style>
-            </head>
-            <body>
-              <div class="header"><h2>Daily Profit Notification</h2></div>
-              <div class="content">
-                <p>Hello ${user.firstName || "Investor"},</p>
-                <p>You've earned <b>$${totalDailyProfit.toFixed(2)}</b> in profit today from your active investments.</p>
-                <p>Keep your investments running to continue earning daily returns!</p>
-              </div>
-              <div style="text-align:center;color:#666;font-size:14px;margin-top:20px;">
-                <p>Best regards,<br><b>Smartgentrade Team</b></p>
-              </div>
-            </body>
-            </html>
-          `,
-        });
-        console.log(`📧 Daily summary sent to ${user.email}`);
-      } catch (err) {
-        console.error("❌ Failed to send daily summary email:", err);
-      }
+    if (userModified) {
+      user.markModified("plan");
+      await user.save();
+      console.log(`💾 Saved updated data for user ${user._id}`);
     }
-
-   if (userModified) {
-  try {
-    user.markModified("plan");
-    await UsersDatabase.updateOne({ _id: user._id }, { $set: { plan: user.plan, balance: user.balance, profit: user.profit } });
-    console.log(`💾 User ${user._id} updated successfully.`);
-  } catch (err) {
-    console.error(`❌ Failed to update user ${user._id}:`, err);
   }
 }
-
-  }
-
-  console.log("✅ Daily profit job completed successfully!");
-}
-
-router.post("/send-email", async (req, res) => {
-  
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${"re_cLvMH6wd_PepfmEZfFNEMEpTVAdtjviwJ"}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(req.body)
-    });
-
-    const data = await response.json();
-    res.status(response.status).json(data);
-  } catch (err) {
-    console.error("Email send error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get("/run-daily-profit", async (req, res) => {
-  try {
-    await runDailyProfitJob();
-    res.json({ success: true, message: "Daily profit job executed manually." });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 router.post("/:_id/deposit", async (req, res) => {
   const { _id } = req.params;
@@ -1679,25 +1536,12 @@ router.put("/:_id/kyc/approve", async (req, res) => {
       return res.status(400).json({ success: false, message: "KYC already verified" });
     }
 
-    // ✅ Update KYC status for user
+    // ✅ Update KYC status
     user.kyc = "Verified";
     user.kycApprovedAt = new Date();
     await user.save();
 
     console.log("✅ User KYC updated:", { email: user.email, status: user.kyc });
-
-    // ✅ Update KYC image status to 'approved'
-    const updatedImage = await Image.findOneAndUpdate(
-      { ownerdet: _id }, // assuming 'owner' in Image collection is the user’s ID
-      { $set: { status: "approved" } },
-      { new: true }
-    );
-
-    if (updatedImage) {
-      console.log("🖼️ KYC image status updated to 'approved' for owner:", _id);
-    } else {
-      console.warn("⚠️ No image found for this owner:", _id);
-    }
 
     // ✅ Send approval email
     try {
@@ -1712,14 +1556,13 @@ router.put("/:_id/kyc/approve", async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "KYC verified successfully, image status approved, and email sent",
+      message: "KYC verified successfully and email notification sent",
       user: {
         _id: user._id,
         email: user.email,
         kyc: user.kyc,
         kycApprovedAt: user.kycApprovedAt,
       },
-      image: updatedImage || null,
     });
 
   } catch (error) {
@@ -1731,7 +1574,6 @@ router.put("/:_id/kyc/approve", async (req, res) => {
     });
   }
 });
-
 
 router.get("/:_id/deposit/history", async (req, res) => {
   const { _id } = req.params;
@@ -1815,99 +1657,61 @@ router.post("/kyc/alert", async (req, res) => {
 
 router.post("/:_id/withdrawal", async (req, res) => {
   const { _id } = req.params;
-  const { method, address, amount, from, account, to, timestamp, source } = req.body; // added "source"
+  const { method, address, amount, from ,account,to,timestamp} = req.body;
+
+  const user = await UsersDatabase.findOne({ _id });
+
+  if (!user) {
+    res.status(404).json({
+      success: false,
+      status: 404,
+      message: "User not found",
+    });
+
+    return;
+  }
 
   try {
-    const user = await UsersDatabase.findOne({ _id });
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        status: 404,
-        message: "User not found",
-      });
-    }
-
-    // Determine which wallet to deduct from
-    if (source == "Balance") {
-      if (user.balance < amount) {
-        return res.status(400).json({
-          success: false,
-          status: 400,
-          message: "Insufficient balance for withdrawal.",
-        });
-      }
-      user.balance -= amount;
-    } 
-    else if (source == "Profit") {
-      if (user.profit < amount) {
-        return res.status(400).json({
-          success: false,
-          status: 400,
-          message: "Insufficient profit for withdrawal.",
-        });
-      }
-      user.profit -= amount;
-    } 
-    else {
-      return res.status(400).json({
-        success: false,
-        status: 400,
-        message: "Invalid withdrawal source.",
-      });
-    }
-
-    // Add the withdrawal record
-    user.withdrawals.push({
-      _id: uuidv4(),
-      method,
-      address,
-      amount,
-      from,
-      account,
-      source,
-      status: "pending",
-      timestamp,
-    });
-
-    await user.save();
-
-    // ✅ Send emails (user + admin notifications)
-    sendWithdrawalEmail({
-      amount,
-      method,
-      to,
-      address,
-      from,
-      source,
-    });
-
-    sendWithdrawalRequestEmail({
-      amount,
-      method,
-      address,
-      from,
-      source,
+    await user.updateOne({
+      withdrawals: [
+        ...user.withdrawals,
+        {
+          _id: uuidv4(),
+          method,
+          address,
+          amount,
+          from,
+          account,
+          status: "pending",
+          timestamp
+        },
+      ],
     });
 
     res.status(200).json({
       success: true,
       status: 200,
-      message: "Withdrawal request submitted successfully",
-      updatedUser: {
-        balance: user.balance,
-        profit: user.profit,
-      },
+      message: "Withdrawal request was successful",
+    });
+
+    sendWithdrawalEmail({
+      amount: amount,
+      method: method,
+     to:to,
+      address:address,
+      from: from,
+    });
+
+    sendWithdrawalRequestEmail({
+      amount: amount,
+      method: method,
+      address:address,
+      from: from,
     });
   } catch (error) {
-    console.error("Withdrawal Error:", error);
-    res.status(500).json({
-      success: false,
-      status: 500,
-      message: "Internal server error while processing withdrawal",
-    });
+    console.log(error);
   }
 });
-
 
 // router.put('/approve/:_id', async (req,res)=>{
 //   const { _id} = req.params;
@@ -1969,19 +1773,10 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
       });
     }
 
-    // 🔹 Try to get subdocument via Mongoose helper first
-    let withdrawalTx = null;
-    // If withdrawals is a Mongoose DocumentArray, .id(transactionId) works
-    if (typeof user.withdrawals.id === "function") {
-      withdrawalTx = user.withdrawals.id(transactionId);
-    }
-
-    // Fallback: find by comparing stringified _id (covers ObjectId vs string)
-    if (!withdrawalTx) {
-      withdrawalTx = user.withdrawals.find(
-        (tx) => (tx._id ? tx._id.toString() : tx.id) === transactionId
-      );
-    }
+    // 🔹 Find withdrawal transaction
+    const withdrawalTx = user.withdrawals.find(
+      (tx) => tx._id.toString() === transactionId
+    );
 
     if (!withdrawalTx) {
       return res.status(404).json({
@@ -1999,43 +1794,31 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
       });
     }
 
-    // 🔹 Update transaction status & record approver time
+    // 🔹 Update transaction status
     withdrawalTx.status = "Approved";
-    withdrawalTx.approvedAt = new Date();
-
-    // If for any reason Mongoose didn't detect the change, mark the path
-    // This ensures changes to nested arrays are noticed on save.
-    user.markModified && user.markModified("withdrawals");
 
     // 🔹 Subtract amount from user profit safely
     const amount = Number(withdrawalTx.amount) || 0;
     user.profit = Math.max((user.profit || 0) - amount, 0); // prevent negative profit
 
-    // 🔹 Save changes (important: await this)
+    // 🔹 Save changes
     await user.save();
 
-    // Prepare response payload (fresh subdoc)
-    const savedTx = (typeof user.withdrawals.id === "function")
-      ? user.withdrawals.id(transactionId)
-      : user.withdrawals.find((tx) => (tx._id ? tx._id.toString() : tx.id) === transactionId);
-
-    // ✅ Respond success (we saved before responding)
+    // ✅ Respond success (before sending email)
     res.status(200).json({
       success: true,
       message: "Withdrawal approved and profit updated",
-      transaction: savedTx,
+      transaction: withdrawalTx,
       updatedProfit: user.profit,
     });
 
-    // 🔹 Send withdrawal approval email (fire-and-forget)
-    sendWithdrawalApproval({
-      from: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
+    // 🔹 Send withdrawal approval email (async, after response)
+    await sendWithdrawalApproval({
+      from: `${user.firstName} ${user.lastName}`,
       amount: withdrawalTx.amount,
       method: withdrawalTx.method,
       timestamp: new Date().toLocaleString(),
       to: user.email,
-    }).catch((emailErr) => {
-      console.error("❌ Failed to send withdrawal approval email:", emailErr);
     });
 
   } catch (error) {
@@ -2045,6 +1828,15 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
       message: "An error occurred while approving withdrawal",
       error: error.message,
     });
+  }
+});
+
+router.get("/run-daily-profit", async (req, res) => {
+  try {
+    await runDailyProfitJob();
+    res.json({ success: true, message: "Job executed manually" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
