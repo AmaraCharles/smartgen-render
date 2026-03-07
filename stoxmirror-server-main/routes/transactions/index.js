@@ -57,44 +57,47 @@ async function runDailyProfitJob() {
 
     if (typeof user.profit === "undefined") {
       user.profit = 0;
+      userModified = true;
     }
 
-    for (const trade of user.plan) {
+    for (let i = 0; i < user.plan.length; i++) {
+      const trade = user.plan[i];
       if (trade.status !== "active") continue;
 
-      const lastUpdate = new Date(trade.lastProfitUpdate || trade.startTime);
-      const hoursPassed = (now - lastUpdate) / (1000 * 60 * 60);
+      const start = new Date(trade.startTime);
+      const hoursSinceStart = (now - start) / (1000 * 60 * 60);
 
-      // ⛔ Stop if 24h not reached
-      if (hoursPassed < 24) continue;
+      // ⛔ Skip if 24 hours not yet reached
+      if (hoursSinceStart < 24) continue;
 
-      let rate = Number(trade.dailyProfitRate);
-      rate = rate > 1 ? rate / 100 : rate;
+      // ✅ Already processed? Skip
+      if (trade.profitCredited) continue;
 
-      const base = Number(trade.amount);
-      const profit = base * rate;
+      // ✅ NORMALIZE RATE
+      let DAILY_PERCENTAGE = Number(trade.dailyProfitRate);
+      DAILY_PERCENTAGE =
+        DAILY_PERCENTAGE > 1 ? DAILY_PERCENTAGE / 100 : DAILY_PERCENTAGE;
 
-      // credit profit
-      user.profit += profit;
-      trade.profit = (trade.profit || 0) + profit;
-      trade.totalProfit = (trade.totalProfit || 0) + profit;
+      const BASE_AMOUNT = Number(trade.amount) || 0;
+      const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
 
-      trade.daysElapsed = (trade.daysElapsed || 0) + 1;
-      trade.lastProfitUpdate = now;
+      // ✅ CREDIT PROFIT
+      user.profit += PROFIT_PER_DAY;
+      trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
+      trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
+      trade.profitCredited = true; // 🔒 prevents duplicate credit
 
-      console.log(`💰 Credited ${profit.toFixed(2)} to ${user._id}`);
+      console.log(`💰 Profit ${PROFIT_PER_DAY.toFixed(2)} credited to user ${user._id}`);
 
-      // ✅ check if trade finished
-      if (trade.daysElapsed >= trade.duration) {
-        trade.status = "COMPLETED";
-        trade.result = "WON";
-        trade.exitPrice = trade.amount + trade.totalProfit;
-        trade.endDate = now;
-
-        console.log(`✅ Trade ${trade._id} completed`);
-      }
+      // ✅ AUTO-COMPLETE TRADE
+      const EXIT_PRICE = BASE_AMOUNT + trade.totalProfit;
+      trade.status = "COMPLETED";
+      trade.exitPrice = EXIT_PRICE;
+      trade.result = "WON";
+      trade.completedAt = now;
 
       userModified = true;
+      console.log(`✅ Trade ${trade._id} auto-completed for user ${user._id}`);
     }
 
     if (userModified) {
@@ -104,6 +107,63 @@ async function runDailyProfitJob() {
     }
   }
 }
+
+// async function runDailyProfitJob() {
+//   const runningUsers = await UsersDatabase.find({ "plan.status": "active" });
+//   const now = new Date();
+
+//   for (const user of runningUsers) {
+//     let userModified = false;
+
+//     if (typeof user.profit === "undefined") {
+//       user.profit = 0;
+//     }
+
+//     for (const trade of user.plan) {
+//       if (trade.status !== "active") continue;
+
+//       const lastUpdate = new Date(trade.lastProfitUpdate || trade.startTime);
+//       const hoursPassed = (now - lastUpdate) / (1000 * 60 * 60);
+
+//       // ⛔ Stop if 24h not reached
+//       if (hoursPassed < 24) continue;
+
+//       let rate = Number(trade.dailyProfitRate);
+//       rate = rate > 1 ? rate / 100 : rate;
+
+//       const base = Number(trade.amount);
+//       const profit = base * rate;
+
+//       // credit profit
+//       user.profit += profit;
+//       trade.profit = (trade.profit || 0) + profit;
+//       trade.totalProfit = (trade.totalProfit || 0) + profit;
+
+//       trade.daysElapsed = (trade.daysElapsed || 0) + 1;
+//       trade.lastProfitUpdate = now;
+
+//       console.log(`💰 Credited ${profit.toFixed(2)} to ${user._id}`);
+
+//       // ✅ check if trade finished
+//       if (trade.daysElapsed >= trade.duration) {
+//         trade.status = "COMPLETED";
+//         trade.result = "WON";
+//         trade.exitPrice = trade.amount + trade.totalProfit;
+//         trade.endDate = now;
+
+//         console.log(`✅ Trade ${trade._id} completed`);
+//       }
+
+//       userModified = true;
+//     }
+
+//     if (userModified) {
+//       user.markModified("plan");
+//       await user.save();
+//       console.log(`💾 Saved user ${user._id}`);
+//     }
+//   }
+// }
 router.post("/:_id/deposit", async (req, res) => {
   const { _id } = req.params;
   const { method, amount, from ,timestamp,to} = req.body;
