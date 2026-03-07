@@ -40,8 +40,7 @@ const { v4: uuidv4 } = require("uuid");
 const app=express()
 
 
- const cron = require("node-cron");
-
+ 
 // ✅ Schedule: runs every hour to check trades
 cron.schedule("0 * * * *", async () => {
   console.log("⏰ Auto-checking trades...");
