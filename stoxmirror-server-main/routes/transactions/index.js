@@ -40,9 +40,15 @@ const { v4: uuidv4 } = require("uuid");
 const app=express()
 
 
- async function runDailyProfitJob() {
-  console.log("⏰ Running daily profit job...");
+ const cron = require("node-cron");
 
+// ✅ Schedule: runs every hour to check trades
+cron.schedule("0 * * * *", async () => {
+  console.log("⏰ Auto-checking trades...");
+  await runDailyProfitJob();
+});
+
+async function runDailyProfitJob() {
   const runningUsers = await UsersDatabase.find({ "plan.status": "active" });
   const now = new Date();
 
@@ -56,64 +62,48 @@ const app=express()
 
     for (let i = 0; i < user.plan.length; i++) {
       const trade = user.plan[i];
-      if (trade.status !== "RUNNING") continue;
+      if (trade.status !== "active") continue;
 
       const start = new Date(trade.startTime);
-      const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+      const hoursSinceStart = (now - start) / (1000 * 60 * 60);
 
-      // ✅ CLOSE TRADE AFTER 90 DAYS
-      if (diffDays >= 90) {
-        const TOTAL_PROFIT = trade.totalProfit || 0;
-        const EXIT_PRICE = Number(trade.amount) + TOTAL_PROFIT;
+      // ⛔ Skip if 24 hours not yet reached
+      if (hoursSinceStart < 24) continue;
 
-        trade.status = "COMPLETED";
-        trade.exitPrice = EXIT_PRICE;
-        trade.result = "WON";
-
-        userModified = true;
-        console.log(`✅ Trade ${trade._id} completed for user ${user._id}`);
-        continue;
-      }
-
-      // ✅ CHECK 24 HOURS SINCE LAST PROFIT
-      const lastProfitAt = trade.lastProfitAt
-        ? new Date(trade.lastProfitAt)
-        : start;
-
-      const hoursSinceLastProfit =
-        (now - lastProfitAt) / (1000 * 60 * 60);
-
-      if (hoursSinceLastProfit < 24) {
-        continue; // ⛔ Skip if 24h not reached
-      }
+      // ✅ Already processed? Skip
+      if (trade.profitCredited) continue;
 
       // ✅ NORMALIZE RATE
       let DAILY_PERCENTAGE = Number(trade.dailyProfitRate);
       DAILY_PERCENTAGE =
-        DAILY_PERCENTAGE > 1
-          ? DAILY_PERCENTAGE / 100
-          : DAILY_PERCENTAGE;
+        DAILY_PERCENTAGE > 1 ? DAILY_PERCENTAGE / 100 : DAILY_PERCENTAGE;
 
       const BASE_AMOUNT = Number(trade.amount) || 0;
       const PROFIT_PER_DAY = BASE_AMOUNT * DAILY_PERCENTAGE;
 
-      // ✅ ADD PROFIT (NOT TO BALANCE)
+      // ✅ CREDIT PROFIT
       user.profit += PROFIT_PER_DAY;
       trade.profit = (trade.profit || 0) + PROFIT_PER_DAY;
       trade.totalProfit = (trade.totalProfit || 0) + PROFIT_PER_DAY;
+      trade.profitCredited = true; // 🔒 prevents duplicate credit
 
-      trade.lastProfitAt = now; // 🔥 prevents duplicate credit
+      console.log(`💰 Profit ${PROFIT_PER_DAY.toFixed(2)} credited to user ${user._id}`);
+
+      // ✅ AUTO-COMPLETE TRADE
+      const EXIT_PRICE = BASE_AMOUNT + trade.totalProfit;
+      trade.status = "COMPLETED";
+      trade.exitPrice = EXIT_PRICE;
+      trade.result = "WON";
+      trade.completedAt = now;
+
       userModified = true;
-
-      console.log(
-        `💰 Added ${PROFIT_PER_DAY.toFixed(2)} profit to user ${user._id}`
-      );
+      console.log(`✅ Trade ${trade._id} auto-completed for user ${user._id}`);
     }
 
     if (userModified) {
       user.markModified("plan");
       await user.save();
-      console.log(`💾 Saved updated data for user ${user._id}`);
+      console.log(`💾 Saved user ${user._id}`);
     }
   }
 }
