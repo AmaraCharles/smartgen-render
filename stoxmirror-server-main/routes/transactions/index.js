@@ -1,4 +1,3 @@
-
 var express = require("express");
 // const { v4: uuidv4 } = require("uuid");
 const UsersDatabase = require("../../models/User");
@@ -1832,7 +1831,7 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
     }
 
     // 🔹 Prevent double approval
-    if (withdrawalTx.status === "Approved") {
+    if (withdrawalTx.status === "approved") {
       return res.status(400).json({
         success: false,
         message: "Withdrawal already approved",
@@ -1840,13 +1839,14 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
     }
 
     // 🔹 Update transaction status
-    withdrawalTx.status = "Approved";
+    withdrawalTx.status = "approved";
 
     // 🔹 Subtract amount from user profit safely
     const amount = Number(withdrawalTx.amount) || 0;
     user.profit = Math.max((user.profit || 0) - amount, 0); // prevent negative profit
 
-    // 🔹 Save changes
+    // 🔹 Tell Mongoose the nested array was mutated, then save
+    user.markModified("withdrawals");
     await user.save();
 
     // ✅ Respond success (before sending email)
@@ -1905,23 +1905,18 @@ router.put("/:_id/withdrawals/:transactionId/decline", async (req, res) => {
   }
 
   try {
-    const withdrawalsArray = user.withdrawals;
-    const withdrawalTx = withdrawalsArray.filter(
-      (tx) => tx._id === transactionId
+    const withdrawalTx = user.withdrawals.find(
+      (tx) => tx._id.toString() === transactionId
     );
 
-    withdrawalTx[0].status = "Declined";
-    // console.log(withdrawalTx);
+    if (!withdrawalTx) {
+      return res.status(404).json({ success: false, message: "Withdrawal transaction not found" });
+    }
 
-    // const cummulativeWithdrawalTx = Object.assign({}, ...user.withdrawals, withdrawalTx[0])
-    // console.log("cummulativeWithdrawalTx", cummulativeWithdrawalTx);
+    withdrawalTx.status = "declined";
 
-    await user.updateOne({
-      withdrawals: [
-        ...user.withdrawals
-        //cummulativeWithdrawalTx
-      ],
-    });
+    user.markModified("withdrawals");
+    await user.save();
 
     res.status(200).json({
       message: "Transaction Declined",
