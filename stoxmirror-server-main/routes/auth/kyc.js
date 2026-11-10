@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const { sendKycAlert } = require("../../utils");
 const Image = require("../../models/Image");
+const { requireAuth, requireAdmin } = require("../../middleware/security");
 
 // Create a MongoDB model for storing image URLs
 // const Image = mongoose.model('Image', {
@@ -17,7 +18,7 @@ const Image = require("../../models/Image");
 router.use(express.json());
 
 // Endpoint to store image URL
-router.post('/kyc', async (req, res) => {
+router.post('/kyc', requireAuth, async (req, res) => {
   try {
     const { imageUrl, owner, docNum,ownerdet } = req.body;
 
@@ -34,7 +35,7 @@ sendKycAlert({owner})
 });
 
 // Generic endpoint to handle 'kyc2' and 'kyc3' logic
-router.post('/kyc/:type', async (req, res) => {
+router.post('/kyc/:type', requireAuth, async (req, res) => {
   try {
     const { type } = req.params;
     const imageUrlKey = `imageUrl${type.slice(-1)}`; // Determines if it's kyc2 or kyc3
@@ -56,7 +57,7 @@ router.post('/kyc/:type', async (req, res) => {
 });
 
 // Endpoint for fetching images
-router.get('/kyc/fetch-images', async (req, res) => {
+router.get('/kyc/fetch-images', requireAdmin, async (req, res) => {
   try {
     const images = await Image.find();
     res.json(images);
@@ -67,7 +68,7 @@ router.get('/kyc/fetch-images', async (req, res) => {
 });
 
 // ✅ DELETE a specific KYC image by ID
-router.delete('/kyc/delete-image/:id', async (req, res) => {
+router.delete('/kyc/delete-image/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -81,9 +82,11 @@ router.delete('/kyc/delete-image/:id', async (req, res) => {
     if (image.imageUrl && image.imageUrl.startsWith('./uploads')) {
       const fs = await import('fs');
       const path = await import('path');
+      const uploadsDir = path.resolve('./uploads');
       const filePath = path.resolve(image.imageUrl);
 
-      if (fs.existsSync(filePath)) {
+      // imageUrl is user-supplied; never delete anything outside ./uploads.
+      if (filePath.startsWith(uploadsDir + path.sep) && fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
         console.log('🗑️ Deleted file:', filePath);
       }

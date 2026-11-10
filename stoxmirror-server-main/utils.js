@@ -677,7 +677,7 @@ const resendWelcomeEmail = async ({ to, token }) => {
   }
 };
 
-const resetEmail = async ({ to, token }) => {
+const resetEmail = async ({ to, otp }) => {
   try {
     await resend.emails.send({
       from: process.env.EMAIL_USER,
@@ -687,7 +687,8 @@ const resetEmail = async ({ to, token }) => {
         <html>
         <h2>Welcome to smartgentrade</h2>
         <p>You have requested to change your password. Please use the following OTP to reset your password.</p>
-        <p>Your OTP is: ${speakeasy.totp({ secret: secret.base32, encoding: 'base32' })}</p>
+        <p>Your OTP is: ${otp}</p>
+        <p>This code expires in 10 minutes.</p>
         <p>If you did not request this password reset, please contact our support immediately.</p>
         <p>Best wishes,</p>
         <p>smartgentrade Team</p>

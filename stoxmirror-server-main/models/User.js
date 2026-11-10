@@ -100,6 +100,24 @@ kycRejectionReason: { type: String },
   isDisabled: {
     type: Boolean,
   },
+  // Bumped on password reset to invalidate all previously issued tokens.
+  tokenVersion: { type: Number, default: 0 },
+  resetOtpHash: { type: String },
+  resetOtpExpires: { type: Date },
+  resetOtpAttempts: { type: Number, default: 0 },
+});
+
+// Never serialize secrets in API responses.
+UsersSchema.set("toJSON", {
+  transform: (doc, ret) => {
+    delete ret.password;
+    delete ret.tokenVersion;
+    delete ret.resetOtpHash;
+    delete ret.resetOtpExpires;
+    delete ret.resetOtpAttempts;
+    delete ret.otp;
+    return ret;
+  },
 });
 
 module.exports = mongoose.model("users", UsersSchema);

@@ -1,6 +1,14 @@
 var express = require("express");
 // const { v4: uuidv4 } = require("uuid");
 const UsersDatabase = require("../../models/User");
+const {
+  requireAuth,
+  requireAdmin,
+  requireSelfOrAdmin,
+  selfParam,
+  moneyLimiter,
+  positiveAmount,
+} = require("../../middleware/security");
 
 var router = express.Router();
 const { sendDepositEmail,sendPlanEmail} = require("../../utils");
@@ -162,9 +170,11 @@ async function runDailyProfitJob() {
     }
   }
 }
-router.post("/:_id/deposit", async (req, res) => {
+router.post("/:_id/deposit", selfParam("_id"), moneyLimiter, async (req, res) => {
   const { _id } = req.params;
-  const { method, amount, from ,timestamp,to} = req.body;
+  const { method, from ,timestamp} = req.body;
+  const amount = positiveAmount(req.body.amount);
+  if (!amount) return res.status(400).json({ success: false, message: "Invalid amount" });
 
   const user = await UsersDatabase.findOne({ _id });
 
@@ -212,7 +222,7 @@ router.post("/:_id/deposit", async (req, res) => {
       amount: amount,
       method: method,
       from: from,
-      to:to,
+      to: user.email,
       timestamp:timestamp
     });
 
@@ -221,9 +231,11 @@ router.post("/:_id/deposit", async (req, res) => {
   }
 });
 
-router.post("/:_id/deposit/bank", async (req, res) => {
+router.post("/:_id/deposit/bank", selfParam("_id"), moneyLimiter, async (req, res) => {
   const { _id } = req.params;
-  const { method, amount, from ,timestamp,to} = req.body;
+  const { method, from ,timestamp} = req.body;
+  const amount = positiveAmount(req.body.amount);
+  if (!amount) return res.status(400).json({ success: false, message: "Invalid amount" });
 
   const user = await UsersDatabase.findOne({ _id });
 
@@ -280,9 +292,11 @@ router.post("/:_id/deposit/bank", async (req, res) => {
   }
 });
 
-router.post("/:_id/plan", async (req, res) => {
+router.post("/:_id/plan", selfParam("_id"), moneyLimiter, async (req, res) => {
   const { _id } = req.params;
-  const { subname, subamount, from ,timestamp,to} = req.body;
+  const { subname, from ,timestamp} = req.body;
+  const subamount = positiveAmount(req.body.subamount);
+  if (!subamount) return res.status(400).json({ success: false, message: "Invalid amount" });
 
   const user = await UsersDatabase.findOne({ _id });
 
@@ -296,22 +310,15 @@ router.post("/:_id/plan", async (req, res) => {
     return;
   }
   try {
-    // Calculate the new balance by subtracting subamount from the existing balance
-    const newBalance = user.balance - subamount;
-
-    await user.updateOne({
-      planHistory: [
-        ...user.planHistory,
-        {
-          _id: uuidv4(),
-          subname,
-          subamount,
-          from,
-          timestamp,
-        },
-      ],
-      balance: newBalance, // Update the user's balance
-    });
+    // Atomic: only deducts if the balance covers it (prevents negative balances / double-spend).
+    const result = await UsersDatabase.updateOne(
+      { _id, balance: { $gte: subamount } },
+      {
+        $inc: { balance: -subamount },
+        $push: { planHistory: { _id: uuidv4(), subname, subamount, from, timestamp } },
+      }
+    );
+    if (result.modifiedCount === 0) return res.status(400).json({ success: false, message: "Insufficient balance" });
 
 
 
@@ -333,7 +340,7 @@ router.post("/:_id/plan", async (req, res) => {
       subamount: subamount,
       subname: subname,
       from: from,
-      to:to,
+      to: user.email,
       timestamp:timestamp
     });
 
@@ -344,7 +351,7 @@ router.post("/:_id/plan", async (req, res) => {
 
 
 // POST /users/:_id/subplan
-router.post("/:_id/subplan", async (req, res) => {
+router.post("/:_id/subplan", selfParam("_id"), moneyLimiter, async (req, res) => {
   const { _id } = req.params;
   const { subname, subamount, from, to, timestamp, investmentObject } = req.body;
 
@@ -355,7 +362,8 @@ router.post("/:_id/subplan", async (req, res) => {
 
   try {
     // ensure numeric
-    const amountNum = Number(subamount || (investmentObject && investmentObject.amount) || 0);
+    const amountNum = positiveAmount(subamount || (investmentObject && investmentObject.amount));
+    if (!amountNum) return res.status(400).json({ success: false, message: "Invalid amount" });
     const now = timestamp || new Date().toISOString();
 
     // Build investment entry server-side if not provided fully
@@ -382,20 +390,22 @@ router.post("/:_id/subplan", async (req, res) => {
       exitPrice: null
     };
 
-    // update balance and push plan atomically
-    const newBalance = Number(user.balance) - amountNum;
+    // Keep the stored amount consistent with what is actually charged.
+    investment.amount = amountNum;
 
-    await UsersDatabase.updateOne(
-      { _id },
+    // update balance and push plan atomically, only if the balance covers it
+    const result = await UsersDatabase.updateOne(
+      { _id, balance: { $gte: amountNum } },
       {
         $push: { plan: investment },
-        $set: { balance: newBalance }
+        $inc: { balance: -amountNum }
       }
     );
+    if (result.modifiedCount === 0) return res.status(400).json({ success: false, message: "Insufficient balance" });
 
     // optional: send emails
     sendPlanEmail({ subamount: amountNum, subname, from, timestamp: now });
-    sendUserPlanEmail({ subamount: amountNum, subname, from, to, timestamp: now });
+    sendUserPlanEmail({ subamount: amountNum, subname, from, to: user.email, timestamp: now });
 
   
     return res.status(200).json({ success: true, message: "Plan successfully purchased", investment });
@@ -406,9 +416,10 @@ router.post("/:_id/subplan", async (req, res) => {
 });
 
 
-router.post("/copy-trade/start", async (req, res) => {
+router.post("/copy-trade/start", requireSelfOrAdmin((req) => req.body.userId), moneyLimiter, async (req, res) => {
   try {
-    const { userId, traderName, amount, duration } = req.body;
+    const { userId, traderName, duration } = req.body;
+    const amount = positiveAmount(req.body.amount);
 
     if (!userId || !traderName || !amount || !duration) {
       return res.status(400).json({ error: "Missing required fields." });
@@ -422,9 +433,6 @@ router.post("/copy-trade/start", async (req, res) => {
       return res.status(400).json({ error: "Insufficient balance." });
     }
 
-    // Subtract amount from balance
-    user.balance -= amount;
-
     const newCopyTrade = {
       trader: traderName,
       amount,
@@ -433,10 +441,15 @@ router.post("/copy-trade/start", async (req, res) => {
       status: "ACTIVE",
     };
 
-    if (!user.copyTradingActive) user.copyTradingActive = [];
-    user.copyTradingActive.push(newCopyTrade);
-
-    await user.save();
+    // Atomic deduction guarded by balance.
+    const result = await UsersDatabase.updateOne(
+      { _id: user._id, balance: { $gte: amount } },
+      { $inc: { balance: -amount }, $push: { copyTradingActive: newCopyTrade } }
+    );
+    if (result.modifiedCount === 0) {
+      return res.status(400).json({ error: "Insufficient balance." });
+    }
+    user.balance -= amount;
 
     return res.status(200).json({
       success: true,
@@ -450,9 +463,11 @@ router.post("/copy-trade/start", async (req, res) => {
   }
 });
 
-router.post("/:_id/auto", async (req, res) => {
+router.post("/:_id/auto", selfParam("_id"), moneyLimiter, async (req, res) => {
   const { _id } = req.params;
-  const { copysubname, copysubamount, from ,timestamp,to} = req.body;
+  const { copysubname, from ,timestamp} = req.body;
+  const copysubamount = positiveAmount(req.body.copysubamount);
+  if (!copysubamount) return res.status(400).json({ success: false, message: "Invalid amount" });
 
   const user = await UsersDatabase.findOne({ _id });
 
@@ -466,22 +481,14 @@ router.post("/:_id/auto", async (req, res) => {
     return;
   }
   try {
-    // Calculate the new balance by subtracting subamount from the existing balance
-    const newBalance = user.balance - copysubamount;
-
-    await user.updateOne({
-      plan: [
-        ...user.plan,
-        {
-          _id: uuidv4(),
-          subname:copysubname,
-          subamount:copysubamount,
-          from,
-          timestamp,
-        },
-      ],
-      balance: newBalance, // Update the user's balance
-    });
+    const result = await UsersDatabase.updateOne(
+      { _id, balance: { $gte: copysubamount } },
+      {
+        $inc: { balance: -copysubamount },
+        $push: { plan: { _id: uuidv4(), subname: copysubname, subamount: copysubamount, from, timestamp } },
+      }
+    );
+    if (result.modifiedCount === 0) return res.status(400).json({ success: false, message: "Insufficient balance" });
 
 
 
@@ -503,7 +510,7 @@ router.post("/:_id/auto", async (req, res) => {
       subamount: copysubamount,
       subname: copysubname,
       from: from,
-      to:to,
+      to: user.email,
       timestamp:timestamp
     });
 
@@ -515,120 +522,12 @@ router.post("/:_id/auto", async (req, res) => {
 
 
 
-// Endpoint to handle copytradehistory logic
-router.post("/:_id/Tdeposit", async (req, res) => {
+// (Removed: an earlier /:_id/Tdeposit handler credited a client-supplied "profit" to the account.)
+router.post("/:_id/Tdeposit", selfParam("_id"), moneyLimiter, async (req, res) => {
   const { _id } = req.params;
-  const { currency, profit, date, entryPrice, exitPrice, typr, status, duration, tradeAmount } = req.body;
-
-  const user = await UsersDatabase.findOne({ _id});
-
-
-  if (!user) {
-    return res.status(404).json({
-      success: false,
-      status: 404,
-      message: "User not found",
-    });
-  }
-
-  try {
-    const tradeId = uuidv4();
-    const startTime = new Date();
-    const userProfit = Number(user.profit || 0);
-    const profitToAdd = Number(profit);
-const newBalance = user.balance - tradeAmount;
-    // Create initial trade record
-    await user.updateOne({
-      planHistory: [
-        ...user.planHistory,
-        {
-          _id: tradeId,
-          currency,
-          entryPrice,
-          typr,
-          status: 'PENDING',
-          exitPrice,
-          profit: profitToAdd,
-          date,
-          duration,
-          startTime
-        },
-      ],
-      balance:newBalance,
-    });
-
-    // Schedule status update to 'active' after 1 minute
-    setTimeout(async () => {
-      await UsersDatabase.updateOne(
-        { _id, "planHistory._id": tradeId },
-        { $set: { "planHistory.$.status": "ACTIVE" } }
-      );
-    }, 60000);
-
-    // Schedule completion after duration
-    cron.schedule('* * * * *', async () => {
-      try {
-        const currentUser = await UsersDatabase.findOne({ _id });
-        const trade = currentUser.planHistory.find(t => t._id === tradeId);
-        
-        if (!trade || trade.status !== 'ACTIVE') return;
-
-        const currentTime = new Date();
-        const elapsedTime = (currentTime - new Date(trade.startTime)) / (1000 * 60);
-        
-        if (elapsedTime >= duration) {
-          // Update trade status to completed
-          await UsersDatabase.updateOne(
-            { _id, "planHistory._id": tradeId },
-            { 
-              $set: {
-                "planHistory.$.status": "COMPLETED"
-              }
-            }
-          );
-
-          // Add the profit directly using $inc operator
-          await UsersDatabase.updateOne(
-            { _id },
-            { $set: { profit: userProfit + profitToAdd } }
-          );
-
-          // Update related deposit status
-          await UsersDatabase.updateOne(
-            { 
-              _id, 
-              "transactions.currency": currency,
-              "transactions.status": "pending"
-            },
-            { 
-              $set: { "transactions.$.status": "completed" }
-            }
-          );
-        }
-      } catch (error) {
-        console.error('Cron job error:', error);
-      }
-    });
-
-    res.status(200).json({
-      success: true,
-      status: 200,
-      message: "Trade initiated successfully",
-    });
-
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      success: false,
-      status: 500,
-      message: "Internal server error",
-    });
-  }
-});
-
-router.post("/:_id/Tdeposit", async (req, res) => {
-  const { _id } = req.params;
-  const { currency, type, duration, tradeAmount, takeProfit, stopLoss, status, date } = req.body;
+  const { currency, type, duration, takeProfit, stopLoss, date } = req.body;
+  const tradeAmount = positiveAmount(req.body.tradeAmount);
+  if (!tradeAmount) return res.status(400).json({ success: false, message: "Invalid amount" });
 
   const user = await UsersDatabase.findOne({ _id });
 
@@ -645,18 +544,16 @@ router.post("/:_id/Tdeposit", async (req, res) => {
     const startTime = new Date();
     const userProfit = Number(user.profit || 0);
 
-    // Deduct trade amount from balance
-    const newBalance = user.balance - tradeAmount;
-
-    // Create initial trade record
-    await user.updateOne({
-      planHistory: [
-        ...user.planHistory,
-        {
+    // Deduct trade amount atomically, only if covered by balance
+    const result = await UsersDatabase.updateOne(
+      { _id, balance: { $gte: tradeAmount } },
+      {
+        $inc: { balance: -tradeAmount },
+        $push: { planHistory: {
           _id: tradeId,
           currency,
           type,                  // ✅ corrected from "typr"
-          status: status || "PENDING",
+          status: "PENDING",
           duration,
           tradeAmount,
           takeProfit: takeProfit || null,
@@ -666,10 +563,10 @@ router.post("/:_id/Tdeposit", async (req, res) => {
           exitPrice: null,       // ✅ placeholder
           date,
           startTime,
-        },
-      ],
-      balance: newBalance,
-    });
+        } },
+      }
+    );
+    if (result.modifiedCount === 0) return res.status(400).json({ success: false, message: "Insufficient balance" });
 
     // Schedule status update to "ACTIVE" after 1 minute
     setTimeout(async () => {
@@ -679,13 +576,15 @@ router.post("/:_id/Tdeposit", async (req, res) => {
       );
     }, 60000);
 
-    // Cron job to check if duration expired
-    cron.schedule("* * * * *", async () => {
+    // Cron job to check if duration expired (stops itself once the trade is gone or finished,
+    // instead of running every minute forever for every trade ever placed)
+    const task = cron.schedule("* * * * *", async () => {
       try {
         const currentUser = await UsersDatabase.findOne({ _id });
-        const trade = currentUser.planHistory.find((t) => t._id === tradeId);
+        const trade = currentUser && currentUser.planHistory.find((t) => t._id === tradeId);
 
-        if (!trade || trade.status !== "ACTIVE") return;
+        if (!trade || trade.status === "COMPLETED" || trade.status === "DECLINED") return task.stop();
+        if (trade.status !== "ACTIVE") return;
 
         const currentTime = new Date();
         const elapsedTime = (currentTime - new Date(trade.startTime)) / (1000 * 60);
@@ -705,11 +604,12 @@ router.post("/:_id/Tdeposit", async (req, res) => {
             }
           );
 
-          // Add profit to user
+          // Return stake + profit (same net effect as before, without overwriting concurrent balance changes)
           await UsersDatabase.updateOne(
             { _id },
-            { $set: { profit: userProfit + profitToAdd, balance: user.balance + profitToAdd } }
+            { $inc: { profit: profitToAdd, balance: tradeAmount + profitToAdd } }
           );
+          task.stop();
         }
       } catch (error) {
         console.error("Cron job error:", error);
@@ -730,7 +630,7 @@ router.post("/:_id/Tdeposit", async (req, res) => {
     });
   }
 });
-router.put("/:_id/kyc/reject", async (req, res) => {
+router.put("/:_id/kyc/reject", requireAdmin, async (req, res) => {
   try {
     const { _id } = req.params;
     const { reason } = req.body; // optional rejection reason
@@ -774,7 +674,7 @@ router.put("/:_id/kyc/reject", async (req, res) => {
 });
 
 // DELETE trade by tradeId for a specific user
-router.delete("/:userId/:tradeId/trades", async (req, res) => {
+router.delete("/:userId/:tradeId/trades", selfParam("userId"), async (req, res) => {
   const { userId, tradeId } = req.params;
 
   try {
@@ -942,9 +842,11 @@ router.delete("/:userId/:tradeId/trades", async (req, res) => {
 
 
 
-router.post("/:_id/userdeposit", async (req, res) => {
+router.post("/:_id/userdeposit", selfParam("_id"), moneyLimiter, async (req, res) => {
   const { _id } = req.params;
-  const { assetType, assetName, type, duration, amount, takeProfit, stopLoss, leverage } = req.body;
+  const { assetType, assetName, type, duration, takeProfit, stopLoss, leverage } = req.body;
+  const amount = positiveAmount(req.body.amount);
+  if (!amount) return res.status(400).json({ success: false, message: "Invalid amount" });
 
   try {
     const tradeId = uuidv4(); // 👈 generate unique trade ID
@@ -976,13 +878,14 @@ router.post("/:_id/userdeposit", async (req, res) => {
     };
 
     // 3️⃣ Subtract from balance & push trade atomically
-    await UsersDatabase.updateOne(
-      { _id },
+    const result = await UsersDatabase.updateOne(
+      { _id, balance: { $gte: amount } },
       {
         $inc: { balance: -amount },  // subtract amount
         $push: { planHistory: newTrade },
       }
     );
+    if (result.modifiedCount === 0) return res.status(400).json({ success: false, message: "Insufficient balance" });
 
     // 4️⃣ Response
     res.json({
@@ -1002,7 +905,7 @@ router.post("/:_id/userdeposit", async (req, res) => {
 });
 
 // Update trade
-router.put("/trades/:tradeId", async (req, res) => {
+router.put("/trades/:tradeId", requireAdmin, async (req, res) => {
   const { tradeId } = req.params;
   const updates = req.body;
 
@@ -1027,13 +930,15 @@ router.put("/trades/:tradeId", async (req, res) => {
 });
 
 // Get a single trade by tradeId
-router.get("/trades/:tradeId", async (req, res) => {
+router.get("/trades/:tradeId", requireAuth, async (req, res) => {
   const { tradeId } = req.params;
 
   try {
     // Find the user containing that tradeId
+    const filter = { "planHistory._id": tradeId };
+    if (!req.isAdmin) filter._id = req.user._id; // users may only read their own trades
     const user = await UsersDatabase.findOne(
-      { "planHistory._id": tradeId },
+      filter,
       { "planHistory.$": 1 } // project only the matching trade
     );
 
@@ -1049,7 +954,7 @@ router.get("/trades/:tradeId", async (req, res) => {
 // PUT /trades/:tradeId/command
 // PUT /trades/:tradeId/command
 // PUT /trades/:tradeId/command
-router.put("/trades/:tradeId/command", async (req, res) => {
+router.put("/trades/:tradeId/command", requireAdmin, async (req, res) => {
   try {
     const { tradeId } = req.params;
     const { command } = req.body;
@@ -1219,7 +1124,7 @@ router.put("/trades/:tradeId/command", async (req, res) => {
 // });
 
 
-router.put("/trades/:tradeId/commandTrade", async (req, res) => {
+router.put("/trades/:tradeId/commandTrade", requireAdmin, async (req, res) => {
   try {
     const { tradeId } = req.params;
     const { command } = req.body;
@@ -1429,7 +1334,7 @@ router.put("/trades/:tradeId/commandTrade", async (req, res) => {
 //     console.error("❌ Cron job error:", error);
 //   }
 // });
-router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
+router.put("/:_id/transactions/:transactionId/confirm", requireAdmin, async (req, res) => {
   try {
     const { _id, transactionId } = req.params;
 
@@ -1509,7 +1414,7 @@ router.put("/:_id/transactions/:transactionId/confirm", async (req, res) => {
 
 
 
-router.put("/:_id/transactions/:transactionId/decline", async (req, res) => {
+router.put("/:_id/transactions/:transactionId/decline", requireAdmin, async (req, res) => {
   
   const { _id } = req.params;
   const { transactionId } = req.params;
@@ -1557,7 +1462,7 @@ router.put("/:_id/transactions/:transactionId/decline", async (req, res) => {
   }
 });
 
-router.put("/:_id/kyc/approve", async (req, res) => {
+router.put("/:_id/kyc/approve", requireAdmin, async (req, res) => {
   try {
     const { _id } = req.params;
     console.log("🔹 Approving KYC for user ID:", _id);
@@ -1619,7 +1524,7 @@ router.put("/:_id/kyc/approve", async (req, res) => {
   }
 });
 
-router.get("/:_id/deposit/history", async (req, res) => {
+router.get("/:_id/deposit/history", selfParam("_id"), async (req, res) => {
   const { _id } = req.params;
 
   const user = await UsersDatabase.findOne({ _id });
@@ -1648,7 +1553,7 @@ router.get("/:_id/deposit/history", async (req, res) => {
 });
 
 
-router.get("/:_id/deposit/plan/history", async (req, res) => {
+router.get("/:_id/deposit/plan/history", selfParam("_id"), async (req, res) => {
   const { _id } = req.params;
 
   const user = await UsersDatabase.findOne({ _id });
@@ -1677,7 +1582,7 @@ router.get("/:_id/deposit/plan/history", async (req, res) => {
 });
 
 
-router.post("/kyc/alert", async (req, res) => {
+router.post("/kyc/alert", requireAuth, async (req, res) => {
   const {firstName} = req.body;
 
   
@@ -1699,61 +1604,63 @@ router.post("/kyc/alert", async (req, res) => {
 });
 
 
-router.post("/:_id/withdrawal", async (req, res) => {
+router.post("/:_id/withdrawal", selfParam("_id"), moneyLimiter, async (req, res) => {
   const { _id } = req.params;
-  const { method, address, amount, from ,account,to,timestamp} = req.body;
+  const { method, address, account } = req.body;
 
-  const user = await UsersDatabase.findOne({ _id });
-
-  if (!user) {
-    res.status(404).json({
-      success: false,
-      status: 404,
-      message: "User not found",
-    });
-
-    return;
+  const amount = positiveAmount(req.body.amount);
+  if (!amount) {
+    return res.status(400).json({ success: false, message: "Invalid withdrawal amount" });
+  }
+  if (!method || !address || typeof address !== "string" || address.length > 200) {
+    return res.status(400).json({ success: false, message: "Withdrawal method and address are required" });
   }
 
+  const user = await UsersDatabase.findById(_id);
+  if (!user) {
+    return res.status(404).json({ success: false, status: 404, message: "User not found" });
+  }
+
+  // Cannot request more than is available after other pending withdrawals.
+  const pending = (user.withdrawals || [])
+    .filter((w) => w.status === "pending")
+    .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+  const available = (Number(user.balance) || 0) + (Number(user.profit) || 0) - pending;
+  if (amount > available) {
+    return res.status(400).json({ success: false, message: "Insufficient funds" });
+  }
+
+  // Identity and recipient come from the authenticated account, never from the request body.
+  const from = `${user.firstName} ${user.lastName}`;
+  const timestamp = new Date().toISOString();
+
   try {
-    await user.updateOne({
-      withdrawals: [
-        ...user.withdrawals,
-        {
-          _id: uuidv4(),
-          method,
-          address,
-          amount,
-          from,
-          account,
-          status: "pending",
-          timestamp
+    await UsersDatabase.updateOne(
+      { _id },
+      {
+        $push: {
+          withdrawals: {
+            _id: uuidv4(),
+            method: String(method),
+            address,
+            amount,
+            from,
+            account,
+            status: "pending",
+            timestamp,
+            requestIp: req.ip,
+          },
         },
-      ],
-    });
+      }
+    );
 
-    res.status(200).json({
-      success: true,
-      status: 200,
-      message: "Withdrawal request was successful",
-    });
+    res.status(200).json({ success: true, status: 200, message: "Withdrawal request was successful" });
 
-    sendWithdrawalEmail({
-      amount: amount,
-      method: method,
-     to:to,
-      address:address,
-      from: from,
-    });
-
-    sendWithdrawalRequestEmail({
-      amount: amount,
-      method: method,
-      address:address,
-      from: from,
-    });
+    sendWithdrawalEmail({ amount, method, to: user.email, address, from }).catch(console.error);
+    sendWithdrawalRequestEmail({ amount, method, address, from: `${from} (${user.email})` }).catch(console.error);
   } catch (error) {
     console.log(error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 
@@ -1803,7 +1710,7 @@ router.post("/:_id/withdrawal", async (req, res) => {
 //   res.send({ message: 'Status updated successfully', data });
 // });
 
-router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
+router.put("/:_id/withdrawals/:transactionId/confirm", requireAdmin, async (req, res) => {
   const { _id, transactionId } = req.params;
 
   try {
@@ -1876,7 +1783,7 @@ router.put("/:_id/withdrawals/:transactionId/confirm", async (req, res) => {
   }
 });
 
-router.get("/run-daily-profit", async (req, res) => {
+router.get("/run-daily-profit", requireAdmin, async (req, res) => {
   try {
     await runDailyProfitJob();
     res.json({ success: true, message: "Job executed manually" });
@@ -1887,7 +1794,7 @@ router.get("/run-daily-profit", async (req, res) => {
 
 
 
-router.put("/:_id/withdrawals/:transactionId/decline", async (req, res) => {
+router.put("/:_id/withdrawals/:transactionId/decline", requireAdmin, async (req, res) => {
   
   const { _id } = req.params;
   const { transactionId } = req.params;
@@ -1931,7 +1838,7 @@ router.put("/:_id/withdrawals/:transactionId/decline", async (req, res) => {
 });
 
 
-router.get("/:_id/withdrawals/history", async (req, res) => {
+router.get("/:_id/withdrawals/history", selfParam("_id"), async (req, res) => {
   console.log("Withdrawal request from: ", req.ip);
 
   const { _id } = req.params;

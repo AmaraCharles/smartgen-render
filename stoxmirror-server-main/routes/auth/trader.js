@@ -4,6 +4,7 @@ const UsersDatabase = require("../../models/User");
 
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require("uuid");
+const { requireAdmin } = require("../../middleware/security");
 
 // Define the Trader schema
 const TraderSchema = new mongoose.Schema({
@@ -27,7 +28,7 @@ const TraderSchema = new mongoose.Schema({
 const Trader = mongoose.model('Trader', TraderSchema);
 
 // Register new trader
-router.post("/register", async (req, res) => {
+router.post("/register", requireAdmin, async (req, res) => {
   const {
     name,
     level,
@@ -143,7 +144,7 @@ router.get("/fetch-trader/:id", async (req, res) => {
 });
 
 // Update trader profile by _id
-router.put("/:_id/profile/update", async (req, res) => {
+router.put("/:_id/profile/update", requireAdmin, async (req, res) => {
   const { _id } = req.params;
 
   try {
@@ -166,7 +167,7 @@ router.put("/:_id/profile/update", async (req, res) => {
 
 
 //update signals history
-router.put("/:_id/signals", async (req, res) => {
+router.put("/:_id/signals", requireAdmin, async (req, res) => {
   const { _id } = req.params;
 
   try {

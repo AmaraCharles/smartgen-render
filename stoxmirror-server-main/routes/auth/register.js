@@ -4,6 +4,10 @@ var { hashPassword,sendPasswordOtp,userRegisteration, sendWelcomeEmail,resendWel
 const UsersDatabase = require("../../models/User");
 var router = express.Router();
 const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
+const { authLimiter, signToken } = require("../../middleware/security");
+const { compareHashedPassword } = require("../../utils");
+const { issueResetOtp } = require("./forgot-password");
 
 // Function to generate a referral code
 function generateReferralCode(length) {
@@ -11,7 +15,7 @@ function generateReferralCode(length) {
   let code = "";
 
   for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * characters.length);
+    const randomIndex = crypto.randomInt(0, characters.length);
     code += characters.charAt(randomIndex);
   }
 
@@ -19,8 +23,12 @@ function generateReferralCode(length) {
 }
 
 
-router.post("/register", async (req, res) => {
+router.post("/register", authLimiter, async (req, res) => {
   const { firstName, lastName, email, password, country, referralCode, phone } = req.body;
+
+  if (typeof email !== "string" || typeof password !== "string" || password.length < 6 || password.length > 100) {
+    return res.status(400).json({ success: false, message: "Valid email and a 6-100 character password are required" });
+  }
 
   // Generate OTP
   const otp = speakeasy.totp({
@@ -149,6 +157,7 @@ router.post("/register", async (req, res) => {
       success: true,
       message: "User registered successfully",
       data: savedUser,
+      token: signToken(savedUser, "user"),
       otp,
       otpExpiration,
     });
@@ -308,7 +317,7 @@ router.post("/register", async (req, res) => {
 
 
 
-router.post("/register/resend", async (req, res) => {
+router.post("/register/resend", authLimiter, async (req, res) => {
   const { email } = req.body;
   const user = await UsersDatabase.findOne({ email });
 
@@ -343,76 +352,33 @@ router.post("/register/resend", async (req, res) => {
 });
 
 
-router.post("/register/reset", async (req, res) => {
-  const { email } = req.body;
-  const user = await UsersDatabase.findOne({ email });
-
-  if (!user) {
-    res.status(404).json({
-      success: false,
-      status: 404,
-      message: "User not found",
-    });
-
-    return;
+router.post("/register/reset", authLimiter, async (req, res) => {
+  const user = await UsersDatabase.findOne({ email: String(req.body.email || "") });
+  if (user) {
+    try {
+      await issueResetOtp(user);
+    } catch (error) {
+      console.log(error);
+    }
   }
-
-  try {
-    
-    res.status(200).json({
-      success: true,
-      status: 200,
-      message: "OTP resent successfully",
-    });
-
-    resetEmail({
-      to:req.body.email
-    });
-
-
-   
-
-  } catch (error) {
-    console.log(error);
-  }
+  // Same response either way to prevent account enumeration.
+  res.status(200).json({ success: true, status: 200, message: "OTP resent successfully" });
 });
 
-router.post("/register/otp", async (req, res) => {
-  const { email } = req.body;
-  const { password }=req.body;
-  const {firstName }=req.body;
+// Emails the user their login details. Previously anyone could make the server email arbitrary
+// "credentials" to any address; now the supplied password must actually match the account.
+router.post("/register/otp", authLimiter, async (req, res) => {
+  const email = String(req.body.email || "");
+  const password = String(req.body.password || "");
   const user = await UsersDatabase.findOne({ email });
 
-  if (!user) {
-    res.status(404).json({
-      success: false,
-      status: 404,
-      message: "User not found",
-    });
-
-    return;
+  if (!user || !compareHashedPassword(user.password, password)) {
+    return res.status(401).json({ success: false, status: 401, message: "Invalid credentials" });
   }
 
-  try {
-    
-    res.status(200).json({
-      success: true,
-      status: 200,
-      message: "OTP correct ",
-    });
+  res.status(200).json({ success: true, status: 200, message: "OTP correct " });
 
-    sendUserDetails({
-      to:req.body.email,
-      password:req.body.password,
-      firstName:req.body.firstName
-    });
-
-
-   
-
-  } catch (error) {
-    console.log(error);
-  }
+  sendUserDetails({ to: user.email, password, firstName: user.firstName }).catch(console.log);
 });
 
 
@@ -430,7 +396,7 @@ router.post("/register/otp", async (req, res) => {
 //   let code = "";
 
 //   for (let i = 0; i < length; i++) {
-//     const randomIndex = Math.floor(Math.random() * characters.length);
+//     const randomIndex = crypto.randomInt(0, characters.length);
 //     code += characters.charAt(randomIndex);
 //   }
 
