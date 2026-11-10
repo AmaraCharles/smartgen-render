@@ -1124,7 +1124,7 @@ router.put("/trades/:tradeId/command", requireAdmin, async (req, res) => {
 // });
 
 
-router.put("/trades/:tradeId/commandTrade", requireAdmin, async (req, res) => {
+router.put("/trades/:tradeId/commandTrade", requireAuth, async (req, res) => {
   try {
     const { tradeId } = req.params;
     const { command } = req.body;
@@ -1140,6 +1140,14 @@ router.put("/trades/:tradeId/commandTrade", requireAdmin, async (req, res) => {
     // Find the specific trade
     const trade = user.planHistory.find(t => t._id.toString() === tradeId);
     if (!trade) return res.status(404).json({ error: "Trade not found in user" });
+
+    // Non-admins may only activate their OWN trade, once, while it is still pending.
+    if (!req.isAdmin) {
+      const ownsTrade = String(user._id) === String(req.user._id);
+      if (!ownsTrade || command !== "true" || trade.status !== "PENDING") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+    }
 
     // Update trade command and initial status/startTime
     await UsersDatabase.updateOne(

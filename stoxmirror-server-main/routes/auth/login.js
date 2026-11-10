@@ -20,7 +20,9 @@ router.post("/login", authLimiter, async function (request, response) {
     return response.status(403).json({ code: "account disabled" });
   }
 
-  response.status(200).json({ code: "Ok", data: user, token: signToken(user, "user") });
+  // Admins (ADMIN_EMAILS) sign in through the normal login page and get an admin-role token.
+  const role = isAdminEmail(user.email) ? "admin" : "user";
+  response.status(200).json({ code: "Ok", data: user, token: signToken(user, role), role });
 });
 
 // Admin login now requires a password AND the email being listed in ADMIN_EMAILS.
