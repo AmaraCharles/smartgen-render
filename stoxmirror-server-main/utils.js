@@ -679,7 +679,8 @@ const resendWelcomeEmail = async ({ to, token }) => {
 
 const resetEmail = async ({ to, otp }) => {
   try {
-    await resend.emails.send({
+    // Resend returns { error } instead of throwing, so check it explicitly.
+    const { error } = await resend.emails.send({
       from: process.env.EMAIL_USER,
       to: to,
       subject: 'Change Password',
@@ -695,6 +696,7 @@ const resetEmail = async ({ to, otp }) => {
         </html>
       `
     });
+    if (error) throw new Error(`Resend rejected reset email: ${error.message || JSON.stringify(error)}`);
     console.log('Password change email sent successfully');
   } catch (error) {
     console.error('Error sending password change email:', error);

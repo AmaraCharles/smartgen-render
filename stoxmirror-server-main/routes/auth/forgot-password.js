@@ -2,13 +2,13 @@ var express = require("express");
 const crypto = require("crypto");
 const UsersDatabase = require("../../models/User");
 const { hashPassword, resetEmail } = require("../../utils");
-const { authLimiter, requireAuth } = require("../../middleware/security");
+const { resetLimiter, requireAuth, emailQuery, signToken } = require("../../middleware/security");
 var router = express.Router();
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 
-const hashOtp = (otp) => crypto.createHash("sha256").update(String(otp)).digest("hex");
+const hashOtp = (otp) => crypto.createHash("sha256").update(String(otp).trim()).digest("hex");
 
 // Generates a single-use reset code, stores only its hash, and emails it to the account's address.
 async function issueResetOtp(user) {
@@ -19,9 +19,11 @@ async function issueResetOtp(user) {
     resetOtpAttempts: 0,
   });
   await resetEmail({ to: user.email, otp });
+  console.log(`Reset code issued for user ${user._id}`);
 }
 
 async function verifyResetOtp(user, otp) {
+  if (!otp) return false;
   if (!user.resetOtpHash || !user.resetOtpExpires || user.resetOtpExpires < new Date()) return false;
   if ((user.resetOtpAttempts || 0) >= MAX_OTP_ATTEMPTS) return false;
 
@@ -45,25 +47,27 @@ async function setNewPassword(user, password) {
 const validPassword = (p) => typeof p === "string" && p.length >= 6 && p.length <= 100;
 
 // Request a reset code. Same response whether or not the email exists (no enumeration).
-router.put("/forgot-password", authLimiter, async function (req, res) {
-  const user = await UsersDatabase.findOne({ email: String(req.body.email || "") });
+router.put("/forgot-password", resetLimiter, async function (req, res) {
+  const user = await UsersDatabase.findOne(emailQuery(req.body.email));
   if (user) {
     try {
       await issueResetOtp(user);
     } catch (e) {
       console.error("Failed to send reset OTP:", e);
     }
+  } else {
+    console.log("Reset requested for unknown email");
   }
   res.status(200).json({ message: "If that account exists, a reset code has been sent." });
 });
 
 // Reset with emailed code: { email, otp, password }
-router.put("/reset-password", authLimiter, async function (req, res) {
+router.put("/reset-password", resetLimiter, async function (req, res) {
   const { otp, password } = req.body;
   if (!validPassword(password)) return res.status(400).json({ message: "Password must be 6-100 characters" });
 
-  const user = await UsersDatabase.findOne({ email: String(req.body.email || "") });
-  if (!user || !otp || !(await verifyResetOtp(user, otp))) {
+  const user = await UsersDatabase.findOne(emailQuery(req.body.email));
+  if (!user || !(await verifyResetOtp(user, otp))) {
     return res.status(400).json({ message: "Invalid or expired code" });
   }
 
@@ -72,7 +76,7 @@ router.put("/reset-password", authLimiter, async function (req, res) {
 });
 
 // Reset by user id: requires a valid emailed code, OR being logged in as that user (or admin).
-router.put("/:_id/reset-password", authLimiter, async function (req, res, next) {
+router.put("/:_id/reset-password", resetLimiter, async function (req, res, next) {
   const { otp, password } = req.body;
   if (!validPassword(password)) return res.status(400).json({ message: "Password must be 6-100 characters" });
 
@@ -86,11 +90,19 @@ router.put("/:_id/reset-password", authLimiter, async function (req, res, next) 
   }
 
   requireAuth(req, res, async () => {
-    if (!req.isAdmin && String(req.user._id) !== String(user._id)) {
+    const isSelf = String(req.user._id) === String(user._id);
+    if (!req.isAdmin && !isSelf) {
       return res.status(403).json({ message: "Forbidden" });
     }
     try {
       await setNewPassword(user, password);
+      // Other sessions are revoked; give the person who just changed their own password a fresh token
+      // so they are not logged out of the page they are on.
+      if (isSelf) {
+        const fresh = await UsersDatabase.findById(user._id);
+        const role = req.isAdmin ? "admin" : "user";
+        return res.status(200).json({ message: "update was successful", token: signToken(fresh, role), role });
+      }
       return res.status(200).json({ message: "update was successful" });
     } catch (e) {
       next(e);

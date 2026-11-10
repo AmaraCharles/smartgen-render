@@ -134,6 +134,22 @@ const authLimiter = rateLimit({
   handler: limitHandler("Too many attempts, please try again in 15 minutes."),
 });
 
+// Forgot/reset password has its own counter so failed logins don't lock people out of resetting.
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: limitHandler("Too many attempts, please try again in 15 minutes."),
+});
+
+// Case-insensitive, whitespace-tolerant exact email match (input is escaped, so no regex injection).
+function emailQuery(email) {
+  const clean = String(email || "").trim();
+  const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return { email: { $regex: `^${escaped}$`, $options: "i" } };
+}
+
 // Money-moving requests, keyed per authenticated user (falls back to IP).
 const moneyLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -156,5 +172,7 @@ module.exports = {
   positiveAmount,
   globalLimiter,
   authLimiter,
+  resetLimiter,
+  emailQuery,
   moneyLimiter,
 };

@@ -5,7 +5,7 @@ const UsersDatabase = require("../../models/User");
 var router = express.Router();
 const { v4: uuidv4 } = require("uuid");
 const crypto = require("crypto");
-const { authLimiter, signToken } = require("../../middleware/security");
+const { authLimiter, resetLimiter, signToken, emailQuery } = require("../../middleware/security");
 const { compareHashedPassword } = require("../../utils");
 const { issueResetOtp } = require("./forgot-password");
 
@@ -352,8 +352,8 @@ router.post("/register/resend", authLimiter, async (req, res) => {
 });
 
 
-router.post("/register/reset", authLimiter, async (req, res) => {
-  const user = await UsersDatabase.findOne({ email: String(req.body.email || "") });
+router.post("/register/reset", resetLimiter, async (req, res) => {
+  const user = await UsersDatabase.findOne(emailQuery(req.body.email));
   if (user) {
     try {
       await issueResetOtp(user);
