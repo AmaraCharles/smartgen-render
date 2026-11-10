@@ -141,7 +141,6 @@ const moneyLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   keyGenerator: (req) => (req.user ? `u:${req.user._id}` : `ip:${req.ip}`),
-  validate: { keyGeneratorIpFallback: false },
   handler: limitHandler("Too many transaction requests, please try again later."),
 });
 
